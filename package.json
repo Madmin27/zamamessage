@@ -1,0 +1,27 @@
+{
+  "name": "chrono-message",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "clean": "rimraf artifacts cache typechain",
+    "hardhat:compile": "hardhat compile",
+    "hardhat:test": "hardhat test",
+    "hardhat:deploy": "hardhat run scripts/deploy.ts"
+  },
+  "dependencies": {
+    "@fhevm/hardhat-plugin": "^0.1.0",
+    "@fhevm/solidity": "^0.8.0",
+    "dotenv": "^16.4.5",
+    "fhevm": "^0.6.2"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.12.7",
+    "hardhat": "^2.21.0",
+    "rimraf": "^5.0.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

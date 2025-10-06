@@ -1,0 +1,9 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "factoryAddress": "0x35925e92e46e207ceCD0b49E76323213007d317e",
+  "deployer": "0xF6D39Dda8997407110264acEc6a24345834cB639",
+  "deployedAt": "2025-10-05T10:01:37.538Z",
+  "blockNumber": 9347570,
+  "transactionHash": "0x695f17e753a990105467b7b191014b15ea888fb9f418ad5b3287dfca3a98eeb5"
+}

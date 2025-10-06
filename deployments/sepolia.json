@@ -1,0 +1,19 @@
+{
+  "address": "0x84Ee2670dD05d60EC343791dfA6995fEeE0F3Cb3",
+  "version": "V2.1",
+  "deployedAt": "2025-10-05",
+  "network": "sepolia",
+  "features": [
+    "Receiver-only privacy",
+    "Time-locked messages",
+    "getMessageContent (view function)",
+    "readMessage (transaction with isRead tracking)"
+  ],
+  "previousVersions": [
+    {
+      "address": "0x1F41e0B9F631a72B32fd3A36F494f8afd7C0b0F2",
+      "version": "V2",
+      "deprecated": "Missing getMessageContent view function"
+    }
+  ]
+}
