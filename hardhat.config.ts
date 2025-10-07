@@ -1,6 +1,9 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "@fhevm/hardhat-plugin";
+// Only load FHEVM plugin for Zama network to avoid compatibility issues
+if (process.env.ENABLE_FHEVM === "true") {
+  require("@fhevm/hardhat-plugin");
+}
 import * as dotenv from "dotenv";
 
 dotenv.config();

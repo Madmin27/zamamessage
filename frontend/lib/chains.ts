@@ -56,6 +56,34 @@ export const supportedChains = {
     factoryAddress: '0x0000000000000000000000000000000000000000',
     faucet: 'https://app.optimism.io/faucet'
   },
+  lineaSepolia: {
+    id: 59141,
+    name: 'Linea Sepolia',
+    network: 'linea-sepolia',
+    testnet: true,
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    rpcUrls: {
+      default: 'https://rpc.sepolia.linea.build',
+      public: 'https://rpc.sepolia.linea.build'
+    },
+    blockExplorer: 'https://sepolia.lineascan.build',
+    factoryAddress: '0x0000000000000000000000000000000000000000',
+    faucet: 'https://faucet.linea.build/'
+  },
+  polygonAmoy: {
+    id: 80002,
+    name: 'Polygon Amoy',
+    network: 'polygon-amoy',
+    testnet: true,
+    nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+    rpcUrls: {
+      default: 'https://rpc-amoy.polygon.technology',
+      public: 'https://rpc-amoy.polygon.technology'
+    },
+    blockExplorer: 'https://amoy.polygonscan.com',
+    factoryAddress: '0x0000000000000000000000000000000000000000',
+    faucet: 'https://faucet.polygon.technology/'
+  },
   base: {
     id: 8453,
     name: 'Base',
