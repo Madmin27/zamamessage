@@ -19,10 +19,10 @@ export const metadata: Metadata = {
     siteName: "ChronoMessage",
     images: [
       {
-        url: "/icon.svg",
-        width: 512,
-        height: 512,
-        alt: "ChronoMessage Icon"
+        url: "/preview.png",
+        width: 1200,
+        height: 800,
+        alt: "ChronoMessage - Time-Locked Messages on Base"
       }
     ],
     locale: "en_US",
@@ -32,7 +32,15 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ChronoMessage",
     description: "Time-locked encrypted messages on Base blockchain",
-    images: ["/icon.svg"]
+    images: ["/preview.png"]
+  },
+  other: {
+    // Farcaster Mini App Embed Metadata
+    'fc:miniapp:version': '1',
+    'fc:miniapp:imageUrl': 'https://zama.minen.com.tr/preview.png',
+    'fc:miniapp:button:title': 'Open ChronoMessage',
+    'fc:miniapp:button:action:type': 'launch_frame',
+    'fc:miniapp:button:action:url': 'https://zama.minen.com.tr'
   }
 };
 
