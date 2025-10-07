@@ -289,3 +289,4 @@ MIT License - detaylar için [LICENSE](LICENSE) dosyasına bakın.
 **Built with ❤️ using Zama FHE Technology** 🔐
 
 **Not**: Proje production-ready durumda. Sepolia deployment için .env ayarları yapılması gerekiyor.
+# zamamessage
