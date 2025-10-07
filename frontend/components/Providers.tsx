@@ -1,65 +1,72 @@
 "use client";
 
-import { PropsWithChildren, useMemo } from "react";
+import { PropsWithChildren } from "react";
 import { WagmiConfig, createConfig, configureChains } from "wagmi";
 import { jsonRpcProvider } from "wagmi/providers/jsonRpc";
 import { RainbowKitProvider, midnightTheme, connectorsForWallets } from "@rainbow-me/rainbowkit";
 import { injectedWallet, metaMaskWallet } from "@rainbow-me/rainbowkit/wallets";
 import "@rainbow-me/rainbowkit/styles.css";
 import { defineChain } from "viem";
-import { appConfig } from "../lib/env";
+import { supportedChains } from "../lib/chains";
 
 export function Providers({ children }: PropsWithChildren) {
-  const chain = useMemo(
-    () =>
+  // Convert supportedChains to wagmi chain format
+  const chains = Object.values(supportedChains)
+    .filter(c => c.testnet) // Only testnets for now
+    .map(chainConfig =>
       defineChain({
-        id: appConfig.chain.id,
-        name: appConfig.chain.name,
-        network: appConfig.chain.network,
-        nativeCurrency: appConfig.chain.nativeCurrency,
+        id: chainConfig.id,
+        name: chainConfig.name,
+        network: chainConfig.network,
+        nativeCurrency: chainConfig.nativeCurrency,
         rpcUrls: {
-          default: { http: [appConfig.chain.rpcUrl] },
-          public: { http: [appConfig.chain.rpcUrl] }
+          default: { http: [chainConfig.rpcUrls.default] },
+          public: { http: [chainConfig.rpcUrls.public || chainConfig.rpcUrls.default] }
         },
-        blockExplorers: appConfig.chain.explorerUrl
+        blockExplorers: chainConfig.blockExplorer
           ? {
               default: {
                 name: "Explorer",
-                url: appConfig.chain.explorerUrl
+                url: chainConfig.blockExplorer
               }
             }
           : undefined,
-        testnet: appConfig.chain.id !== 1
-      }),
-    []
-  );
+        testnet: chainConfig.testnet
+      })
+    );
 
-  const { publicClient, webSocketPublicClient } = configureChains([chain], [jsonRpcProvider({ rpc: () => ({ http: appConfig.chain.rpcUrl }) })]);
+  const { publicClient, webSocketPublicClient } = configureChains(
+    chains,
+    [
+      jsonRpcProvider({
+        rpc: (chain) => {
+          const chainConfig = Object.values(supportedChains).find(c => c.id === chain.id);
+          return { http: chainConfig?.rpcUrls.default || chain.rpcUrls.default.http[0] };
+        }
+      })
+    ]
+  );
 
   const connectors = connectorsForWallets([
     {
       groupName: "Önerilen",
       wallets: [
-        injectedWallet({ chains: [chain] }),
-        metaMaskWallet({ chains: [chain], projectId: "chronomessage" })
+        injectedWallet({ chains }),
+        metaMaskWallet({ chains, projectId: "chronomessage" })
       ]
     }
   ]);
 
-  const config = useMemo(
-    () =>
-      createConfig({
-        autoConnect: true,
-        connectors,
-        publicClient,
-        webSocketPublicClient
-      }),
-    [connectors, publicClient, webSocketPublicClient]
-  );
+  const config = createConfig({
+    autoConnect: true,
+    connectors,
+    publicClient,
+    webSocketPublicClient
+  });
 
   return (
     <WagmiConfig config={config}>
-      <RainbowKitProvider chains={[chain]} theme={midnightTheme()}>
+      <RainbowKitProvider chains={chains} theme={midnightTheme()}>
         {children}
       </RainbowKitProvider>
     </WagmiConfig>
