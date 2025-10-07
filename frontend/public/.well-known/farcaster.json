@@ -4,6 +4,9 @@
     "payload": "eyJkb21haW4iOiJ6YW1hLm1pbmVuLmNvbS50ciJ9",
     "signature": "MHg2ODA5MmIxMDE1ZWI1MDVhOGJkZDlhZjQyMzAwNmNmYTFjZjQ4YjAzMTJkNTgzNjYzZWQ4MTcyZjM0YzdiMDUxM2E5OTU0NTg4MzVjNDE0MDlkY2Q5NDFiYmI0OTNjNjQ0ZjFkNWRjNzUzZTA3NTM2ODRkNTJhM2MwZGM4MjUxODFj"
   },
+  "baseBuilder": {
+    "allowedAddresses": ["0xbF7Ca51aD0f96B6a80bdD6E14432b9F4D798e9e3"]
+  },
   "miniapp": {
     "version": "1",
     "name": "SealedMessage",
