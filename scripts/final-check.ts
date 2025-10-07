@@ -28,12 +28,12 @@ async function main() {
   console.log(`\n👤 User: ${testUser.substring(0, 10)}...`);
   console.log(`📤 Sent: ${sent.length} messages`);
   if (sent.length > 0) {
-    console.log(`   IDs: ${sent.map(id => id.toString()).join(", ")}`);
+  console.log(`   IDs: ${sent.map((id: any) => id.toString()).join(", ")}`);
   }
   
   console.log(`📥 Received: ${received.length} messages`);
   if (received.length > 0) {
-    console.log(`   IDs: ${received.map(id => id.toString()).join(", ")}`);
+  console.log(`   IDs: ${received.map((id: any) => id.toString()).join(", ")}`);
   }
   
   const total = sent.length + received.length;

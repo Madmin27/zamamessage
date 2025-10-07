@@ -28,14 +28,14 @@ async function main() {
   const senderSentIds = await contract.getSentMessages(senderAddress);
   console.log(`\n📤 Gönderenin gönderdiği: ${senderSentIds.length} mesaj`);
   if (senderSentIds.length > 0) {
-    console.log("   IDs:", senderSentIds.map(id => id.toString()).join(", "));
+  console.log("   IDs:", senderSentIds.map((id: any) => id.toString()).join(", "));
   }
   
   // Alıcının mesajları
   const receiverReceivedIds = await contract.getReceivedMessages(receiverAddress);
   console.log(`\n📥 Alıcının aldığı: ${receiverReceivedIds.length} mesaj`);
   if (receiverReceivedIds.length > 0) {
-    console.log("   IDs:", receiverReceivedIds.map(id => id.toString()).join(", "));
+  console.log("   IDs:", receiverReceivedIds.map((id: any) => id.toString()).join(", "));
   }
   
   // Bu iki adres arasındaki mesajları bul

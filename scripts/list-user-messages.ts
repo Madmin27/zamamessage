@@ -26,14 +26,14 @@ async function main() {
   
   console.log(`📤 Gönderilen: ${sentIds.length} mesaj`);
   if (sentIds.length > 0) {
-    console.log("   Message IDs:", sentIds.map(id => id.toString()).join(", "));
+  console.log("   Message IDs:", sentIds.map((id: any) => id.toString()).join(", "));
   } else {
     console.log("   (Hiç gönderilmemiş)");
   }
   
   console.log(`\n📥 Alınan: ${receivedIds.length} mesaj`);
   if (receivedIds.length > 0) {
-    console.log("   Message IDs:", receivedIds.map(id => id.toString()).join(", "));
+  console.log("   Message IDs:", receivedIds.map((id: any) => id.toString()).join(", "));
   } else {
     console.log("   (Hiç alınmamış)");
   }
