@@ -18,7 +18,7 @@
     "tags": ["messaging", "privacy", "blockchain", "base", "timelock"],
     "heroImageUrl": "https://zama.minen.com.tr/preview.png",
     "tagline": "Messages unlock with time",
-    "ogTitle": "SealedMessage - Time-Locked Messages",
+    "ogTitle": "SealedMessage",
     "ogDescription": "Send encrypted messages that unlock at a specific time on Base blockchain",
     "ogImageUrl": "https://zama.minen.com.tr/preview.png",
     "noindex": false,
