@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { ACTIVE_CONTRACT } from "../config/contracts";
+import { ACTIVE_CONTRACT } from "config/contracts";
 
 async function main() {
   const contractAddress = ACTIVE_CONTRACT;

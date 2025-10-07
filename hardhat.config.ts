@@ -35,12 +35,57 @@ if (process.env.MAINNET_RPC_URL && privateKey) {
   };
 }
 
-// Polygon Mumbai Testnet
+// Polygon Mumbai Testnet (deprecated - use Amoy)
 if (process.env.MUMBAI_RPC_URL && privateKey) {
   networks.mumbai = {
     url: process.env.MUMBAI_RPC_URL,
     accounts: [privateKey],
     chainId: 80001
+  };
+}
+
+// Polygon Amoy Testnet (new testnet)
+if (process.env.POLYGON_AMOY_RPC_URL && privateKey) {
+  networks.polygonAmoy = {
+    url: process.env.POLYGON_AMOY_RPC_URL,
+    accounts: [privateKey],
+    chainId: 80002
+  };
+}
+
+// Base Sepolia Testnet
+if (process.env.BASE_SEPOLIA_RPC_URL && privateKey) {
+  networks.baseSepolia = {
+    url: process.env.BASE_SEPOLIA_RPC_URL,
+    accounts: [privateKey],
+    chainId: 84532
+  };
+}
+
+// Linea Sepolia Testnet
+if (process.env.LINEA_SEPOLIA_RPC_URL && privateKey) {
+  networks.lineaSepolia = {
+    url: process.env.LINEA_SEPOLIA_RPC_URL,
+    accounts: [privateKey],
+    chainId: 59141
+  };
+}
+
+// Arbitrum Sepolia Testnet
+if (process.env.ARBITRUM_SEPOLIA_RPC_URL && privateKey) {
+  networks.arbitrumSepolia = {
+    url: process.env.ARBITRUM_SEPOLIA_RPC_URL,
+    accounts: [privateKey],
+    chainId: 421614
+  };
+}
+
+// Optimism Sepolia Testnet
+if (process.env.OPTIMISM_SEPOLIA_RPC_URL && privateKey) {
+  networks.optimismSepolia = {
+    url: process.env.OPTIMISM_SEPOLIA_RPC_URL,
+    accounts: [privateKey],
+    chainId: 11155420
   };
 }
 
@@ -81,7 +126,12 @@ const config: HardhatUserConfig = {
       sepolia: process.env.ETHERSCAN_API_KEY ?? "",
       mainnet: process.env.ETHERSCAN_API_KEY ?? "",
       polygon: process.env.POLYGONSCAN_API_KEY ?? "",
-      polygonMumbai: process.env.POLYGONSCAN_API_KEY ?? ""
+      polygonMumbai: process.env.POLYGONSCAN_API_KEY ?? "",
+      polygonAmoy: process.env.POLYGONSCAN_API_KEY ?? "",
+      baseSepolia: process.env.BASESCAN_API_KEY ?? "",
+      lineaSepolia: process.env.LINEASCAN_API_KEY ?? "",
+      arbitrumSepolia: process.env.ARBISCAN_API_KEY ?? "",
+      optimismSepolia: process.env.OPTIMISTIC_ETHERSCAN_API_KEY ?? ""
     }
   }
 };

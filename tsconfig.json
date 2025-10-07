@@ -9,6 +9,10 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "types": ["node", "hardhat", "mocha", "chai"]
+    ,"baseUrl": ".",
+    "paths": {
+      "config/*": ["config/*"]
+    }
   },
   "include": ["hardhat.config.ts", "scripts", "test", "typechain-types", "config"]
 }

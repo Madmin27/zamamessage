@@ -4,17 +4,18 @@
  */
 
 export const CONTRACTS = {
-  // AKTIF CONTRACT (V2.1)
+  // AKTIF CONTRACT (V2.2 - Multi-chain ready)
   ACTIVE: {
     address: "0x84Ee2670dD05d60EC343791dfA6995fEeE0F3Cb3",
-    version: "V2.1",
+    version: "V2.2",
     network: "sepolia",
-    deployedAt: "2025-10-05",
+    deployedAt: "2025-10-07",
     features: [
       "Receiver-only privacy",
       "Time-locked messages", 
       "getMessageContent (view)",
-      "readMessage (transaction)"
+      "readMessage (transaction)",
+      "Multi-chain EVM support"
     ]
   },
 
@@ -48,15 +49,63 @@ export const NETWORKS = {
   SEPOLIA: {
     chainId: 11155111,
     name: "Sepolia",
+    currency: "ETH",
     rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
-    explorer: "https://sepolia.etherscan.io"
+    explorer: "https://sepolia.etherscan.io",
+    faucet: "https://sepoliafaucet.com"
+  },
+  BASE_SEPOLIA: {
+    chainId: 84532,
+    name: "Base Sepolia",
+    currency: "ETH",
+    rpcUrl: "https://sepolia.base.org",
+    explorer: "https://sepolia.basescan.org",
+    faucet: "https://www.coinbase.com/faucets/base-ethereum-goerli-faucet"
+  },
+  LINEA_SEPOLIA: {
+    chainId: 59141,
+    name: "Linea Sepolia",
+    currency: "ETH",
+    rpcUrl: "https://rpc.sepolia.linea.build",
+    explorer: "https://sepolia.lineascan.build",
+    faucet: "https://faucet.goerli.linea.build"
+  },
+  ARBITRUM_SEPOLIA: {
+    chainId: 421614,
+    name: "Arbitrum Sepolia",
+    currency: "ETH",
+    rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
+    explorer: "https://sepolia.arbiscan.io",
+    faucet: "https://faucet.quicknode.com/arbitrum/sepolia"
+  },
+  OPTIMISM_SEPOLIA: {
+    chainId: 11155420,
+    name: "Optimism Sepolia",
+    currency: "ETH",
+    rpcUrl: "https://sepolia.optimism.io",
+    explorer: "https://sepolia-optimism.etherscan.io",
+    faucet: "https://app.optimism.io/faucet"
+  },
+  POLYGON_AMOY: {
+    chainId: 80002,
+    name: "Polygon Amoy",
+    currency: "MATIC",
+    rpcUrl: "https://rpc-amoy.polygon.technology",
+    explorer: "https://amoy.polygonscan.com",
+    faucet: "https://faucet.polygon.technology"
   }
 };
 
 // Helper function
-export function getExplorerUrl(address: string, network: string = "sepolia"): string {
-  const explorerBase = NETWORKS.SEPOLIA.explorer;
-  return `${explorerBase}/address/${address}`;
+export function getExplorerUrl(address, network = "sepolia") {
+  const networkKey = network.toUpperCase().replace(/-/g, '_');
+  const networkConfig = NETWORKS[networkKey] || NETWORKS.SEPOLIA;
+  return `${networkConfig.explorer}/address/${address}`;
+}
+
+// Get network config by chainId
+export function getNetworkByChainId(chainId) {
+  return Object.values(NETWORKS).find(n => n.chainId === chainId);
 }
 
 console.log(`
