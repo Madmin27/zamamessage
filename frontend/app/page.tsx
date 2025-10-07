@@ -23,8 +23,7 @@ export default function HomePage() {
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white">SealedMessage</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Create time-locked messages on Zama FHEVM. Your messages are stored securely and cannot be opened by anyone
-              before the date you specify.
+              When conditions intersect, secrets unravel.
             </p>
           </div>
           <div className="flex flex-col gap-3 md:items-end">
