@@ -6,11 +6,26 @@ import { useState, useRef, useEffect } from 'react';
 
 export function NetworkSwitcher() {
   const { chain } = useNetwork();
-  const { switchNetwork, isLoading } = useSwitchNetwork();
+  const { switchNetwork, isLoading, error } = useSwitchNetwork({
+    onSuccess(data) {
+      console.log('✅ Network switched successfully:', data);
+    },
+    onError(error) {
+      console.error('❌ Network switch error:', error);
+    }
+  });
   const [isOpen, setIsOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debug log
+  console.log('🔍 NetworkSwitcher Debug:', {
+    currentChain: chain?.id,
+    switchNetworkAvailable: !!switchNetwork,
+    isLoading,
+    error: error?.message
+  });
 
   const testnets = Object.entries(supportedChains).filter(([_, config]) => config.testnet);
   const mainnets = Object.entries(supportedChains).filter(([_, config]) => !config.testnet);
@@ -95,16 +110,28 @@ export function NetworkSwitcher() {
                 <button
                   key={key}
                   onClick={() => {
-                    if (!isActive && isSupported) {
-                      switchNetwork?.(chainConfig.id);
+                    console.log('🖱️ Chain button clicked:', {
+                      key,
+                      chainId: chainConfig.id,
+                      chainName: chainConfig.name,
+                      isActive,
+                      isSupported,
+                      switchNetworkType: typeof switchNetwork
+                    });
+                    
+                    if (!isActive && switchNetwork) {
+                      console.log('📡 Calling switchNetwork with chainId:', chainConfig.id);
+                      switchNetwork(chainConfig.id);
                       setIsOpen(false);
+                    } else {
+                      console.warn('⚠️ Cannot switch:', { isActive, hasSwitchNetwork: !!switchNetwork });
                     }
                   }}
-                  disabled={isActive || isLoading || !isSupported}
+                  disabled={isActive || isLoading || !switchNetwork}
                   className={`flex w-full items-center justify-between rounded-lg border p-3 mb-2 text-left transition ${
                     isActive
                       ? 'border-green-500 bg-green-900/30'
-                      : isSupported
+                      : switchNetwork
                       ? 'border-slate-700 bg-slate-800/50 hover:border-aurora hover:bg-slate-800'
                       : 'cursor-not-allowed border-slate-800 bg-slate-900/30 opacity-50'
                   }`}

@@ -84,6 +84,20 @@ export const supportedChains = {
     factoryAddress: '0x0000000000000000000000000000000000000000',
     faucet: 'https://faucet.polygon.technology/'
   },
+  monadTestnet: {
+    id: 41454,
+    name: 'Monad Testnet',
+    network: 'monad-testnet',
+    testnet: true,
+    nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
+    rpcUrls: {
+      default: 'https://testnet.monad.xyz',
+      public: 'https://testnet.monad.xyz'
+    },
+    blockExplorer: 'https://testnet.monad.xyz',
+    factoryAddress: '0x0000000000000000000000000000000000000000',
+    faucet: 'https://faucet.monad.xyz/'
+  },
   base: {
     id: 8453,
     name: 'Base',
@@ -137,6 +151,20 @@ export const supportedChains = {
       public: 'https://polygon-rpc.com'
     },
     blockExplorer: 'https://polygonscan.com',
+    factoryAddress: '0x0000000000000000000000000000000000000000',
+    faucet: undefined
+  },
+  monad: {
+    id: 10000, // Monad mainnet chain ID (placeholder - güncel değeri kontrol edin)
+    name: 'Monad',
+    network: 'monad',
+    testnet: false,
+    nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
+    rpcUrls: {
+      default: 'https://rpc.monad.xyz',
+      public: 'https://rpc.monad.xyz'
+    },
+    blockExplorer: 'https://explorer.monad.xyz',
     factoryAddress: '0x0000000000000000000000000000000000000000',
     faucet: undefined
   }
