@@ -25,7 +25,7 @@ export const supportedChains = {
       public: 'https://sepolia.base.org'
     },
     blockExplorer: 'https://sepolia.basescan.org',
-    factoryAddress: '0x0000000000000000000000000000000000000000',
+    factoryAddress: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5', // ✅ Deployed!
     faucet: 'https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet'
   },
   arbitrumSepolia: {

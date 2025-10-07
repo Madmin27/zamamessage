@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { MessageForm } from "../components/MessageForm";
 import { MessageList } from "../components/MessageList";
+import { NetworkSwitcher } from "../components/NetworkSwitcher";
 import { appConfig } from "../lib/env";
 
 export default function HomePage() {
@@ -26,7 +27,12 @@ export default function HomePage() {
               önce kimse tarafından açılamaz.
             </p>
           </div>
-          <ConnectButton showBalance={false} label="Cüzdanı Bağla" accountStatus="address" chainStatus="icon" />
+          <div className="flex flex-col gap-3 md:items-end">
+            <ConnectButton showBalance={false} label="Cüzdanı Bağla" accountStatus="address" chainStatus="icon" />
+            <div className="w-full md:w-80">
+              <NetworkSwitcher />
+            </div>
+          </div>
         </div>
       </header>
 
