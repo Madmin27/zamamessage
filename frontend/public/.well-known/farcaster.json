@@ -1,11 +1,22 @@
 {
   "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+    "header": "eyJmaWQiOjU5OTY2NywidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDU1QTA3NzNlMDhERjU5MmJCZjBEMDZjNmYxZDVDQzU0YjA5MWY5NkMifQ",
+    "payload": "eyJkb21haW4iOiJ6YW1hLm1pbmVuLmNvbS50ciJ9",
+    "signature": "MHg2ODA5MmIxMDE1ZWI1MDVhOGJkZDlhZjQyMzAwNmNmYTFjZjQ4YjAzMTJkNTgzNjYzZWQ4MTcyZjM0YzdiMDUxM2E5OTU0NTg4MzVjNDE0MDlkY2Q5NDFiYmI0OTNjNjQ0ZjFkNWRjNzUzZTA3NTM2ODRkNTJhM2MwZGM4MjUxODFj"
   },
   "baseBuilder": {
     "allowedAddresses": []
+  },
+  "frame": {
+    "version": "1",
+    "imageUrl": "https://zama.minen.com.tr/preview.png",
+    "button": {
+      "title": "Open ChronoMessage",
+      "action": {
+        "type": "launch_frame",
+        "url": "https://zama.minen.com.tr"
+      }
+    }
   },
   "miniapp": {
     "version": "1",
@@ -19,11 +30,11 @@
     "screenshotUrls": [],
     "primaryCategory": "social",
     "tags": ["messaging", "privacy", "blockchain", "base", "timelock"],
-    "heroImageUrl": "https://zama.minen.com.tr/icon.png",
+    "heroImageUrl": "https://zama.minen.com.tr/preview.png",
     "tagline": "Messages unlock with time",
     "ogTitle": "ChronoMessage - Time-Locked Messages",
     "ogDescription": "Send encrypted messages that unlock at a specific time on Base blockchain",
-    "ogImageUrl": "https://zama.minen.com.tr/icon.png",
+    "ogImageUrl": "https://zama.minen.com.tr/preview.png",
     "noindex": false
   }
 }

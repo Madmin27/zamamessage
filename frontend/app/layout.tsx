@@ -35,12 +35,14 @@ export const metadata: Metadata = {
     images: ["/preview.png"]
   },
   other: {
-    // Farcaster Mini App Embed Metadata
-    'fc:miniapp:version': '1',
-    'fc:miniapp:imageUrl': 'https://zama.minen.com.tr/preview.png',
-    'fc:miniapp:button:title': 'Open ChronoMessage',
-    'fc:miniapp:button:action:type': 'launch_frame',
-    'fc:miniapp:button:action:url': 'https://zama.minen.com.tr'
+    // Farcaster Frame Metadata
+    'fc:frame': 'vNext',
+    'fc:frame:image': 'https://zama.minen.com.tr/preview.png',
+    'fc:frame:image:aspect_ratio': '1.91:1',
+    'fc:frame:button:1': 'Open App',
+    'fc:frame:button:1:action': 'link',
+    'fc:frame:button:1:target': 'https://zama.minen.com.tr',
+    'og:image': 'https://zama.minen.com.tr/preview.png'
   }
 };
 
