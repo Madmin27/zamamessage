@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#gradient)"/>
+  
+  <!-- Lock Icon -->
+  <path d="M256 128C220.654 128 192 156.654 192 192V224H176C165.507 224 157 232.507 157 243V373C157 383.493 165.507 392 176 392H336C346.493 392 355 383.493 355 373V243C355 232.507 346.493 224 336 224H320V192C320 156.654 291.346 128 256 128ZM304 192V224H208V192C208 165.49 229.49 144 256 144C282.51 144 304 165.49 304 192ZM256 272C267.046 272 276 280.954 276 292C276 298.627 272.627 304.627 267.5 308L272 336H240L244.5 308C239.373 304.627 236 298.627 236 292C236 280.954 244.954 272 256 272Z" fill="white"/>
+  
+  <!-- Time indicator -->
+  <circle cx="384" cy="128" r="64" fill="#3B82F6"/>
+  <path d="M384 104V128L400 144" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="50%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+</svg>
