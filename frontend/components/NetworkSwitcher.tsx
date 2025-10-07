@@ -6,26 +6,11 @@ import { useState, useRef, useEffect } from 'react';
 
 export function NetworkSwitcher() {
   const { chain } = useNetwork();
-  const { switchNetwork, isLoading, error } = useSwitchNetwork({
-    onSuccess(data) {
-      console.log('✅ Network switched successfully:', data);
-    },
-    onError(error) {
-      console.error('❌ Network switch error:', error);
-    }
-  });
+  const { switchNetwork, isLoading } = useSwitchNetwork();
   const [isOpen, setIsOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Debug log
-  console.log('🔍 NetworkSwitcher Debug:', {
-    currentChain: chain?.id,
-    switchNetworkAvailable: !!switchNetwork,
-    isLoading,
-    error: error?.message
-  });
 
   const testnets = Object.entries(supportedChains).filter(([_, config]) => config.testnet);
   const mainnets = Object.entries(supportedChains).filter(([_, config]) => !config.testnet);
@@ -61,14 +46,12 @@ export function NetworkSwitcher() {
         <div className="flex items-center gap-3">
           <span className="text-2xl">🌐</span>
           <div className="text-left">
-            <p className="text-sm font-semibold text-slate-200">Ağ Seçimi</p>
+            <p className="text-sm font-semibold text-slate-200">Network Selection</p>
             <p className="text-xs text-slate-400">
-              {!mounted ? (
-                'Yükleniyor...'
-              ) : chain ? (
-                <>Aktif: <span className="font-semibold text-green-400">{chain.name}</span></>
+              {mounted && chain ? (
+                <>Active: <span className="font-semibold text-green-400">{chain.name}</span></>
               ) : (
-                'Ağ seçin'
+                'Select network'
               )}
             </p>
           </div>
@@ -89,12 +72,12 @@ export function NetworkSwitcher() {
           {/* Header */}
           <div className="sticky top-0 border-b border-slate-700 bg-slate-900 px-4 py-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-aurora">Ağ Seçimi</h3>
+              <h3 className="font-semibold text-aurora">Network Selection</h3>
               <button
                 onClick={() => setShowAll(!showAll)}
                 className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
               >
-                {showAll ? '🧪 Sadece Testnet' : '🌐 Tüm Ağlar'}
+                {showAll ? '🧪 Testnets Only' : '🌐 All Networks'}
               </button>
             </div>
           </div>
@@ -103,8 +86,9 @@ export function NetworkSwitcher() {
           <div className="p-2">
             {displayChains.map(([key, chainConfig]) => {
               const isActive = chain?.id === chainConfig.id;
-              const isSupported = switchNetwork && Object.keys(switchNetwork).length > 0;
               const hasFactory = chainConfig.factoryAddress !== '0x0000000000000000000000000000000000000000';
+              const isDeployed = hasFactory; // Kontrat deploy edilmiş mi?
+              const canSwitch = switchNetwork && isDeployed && !isActive;
 
               return (
                 <button
@@ -115,51 +99,71 @@ export function NetworkSwitcher() {
                       chainId: chainConfig.id,
                       chainName: chainConfig.name,
                       isActive,
-                      isSupported,
+                      isDeployed,
                       switchNetworkType: typeof switchNetwork
                     });
                     
-                    if (!isActive && switchNetwork) {
+                    if (canSwitch) {
                       console.log('📡 Calling switchNetwork with chainId:', chainConfig.id);
                       switchNetwork(chainConfig.id);
                       setIsOpen(false);
+                    } else if (!isDeployed) {
+                      console.warn('⚠️ Contract not deployed on this network');
                     } else {
                       console.warn('⚠️ Cannot switch:', { isActive, hasSwitchNetwork: !!switchNetwork });
                     }
                   }}
-                  disabled={isActive || isLoading || !switchNetwork}
+                  disabled={isActive || isLoading || !isDeployed}
                   className={`flex w-full items-center justify-between rounded-lg border p-3 mb-2 text-left transition ${
                     isActive
-                      ? 'border-green-500 bg-green-900/30'
-                      : switchNetwork
-                      ? 'border-slate-700 bg-slate-800/50 hover:border-aurora hover:bg-slate-800'
-                      : 'cursor-not-allowed border-slate-800 bg-slate-900/30 opacity-50'
+                      ? 'border-green-500 bg-green-900/30 shadow-md shadow-green-500/20'
+                      : isDeployed
+                      ? 'border-aurora/50 bg-slate-800/80 hover:border-aurora hover:bg-slate-800 hover:shadow-lg hover:shadow-aurora/10 cursor-pointer'
+                      : 'cursor-not-allowed border-slate-800/50 bg-slate-900/20 opacity-40'
                   }`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-200">
+                      <span className={`font-semibold ${
+                        isActive 
+                          ? 'text-green-200' 
+                          : isDeployed 
+                          ? 'text-slate-100' 
+                          : 'text-slate-500'
+                      }`}>
                         {chainConfig.name}
                       </span>
                       {isActive && (
                         <span className="text-green-400">✓</span>
                       )}
+                      {isDeployed && !isActive && (
+                        <span className="text-aurora text-xs">●</span>
+                      )}
                     </div>
                     
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs text-slate-400">
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs ${isDeployed ? 'text-slate-400' : 'text-slate-600'}`}>
                         {chainConfig.nativeCurrency.symbol}
                       </span>
                       
                       {chainConfig.testnet && (
-                        <span className="rounded bg-yellow-900/30 px-1.5 py-0.5 text-xs text-yellow-400">
+                        <span className={`rounded px-1.5 py-0.5 text-xs ${
+                          isDeployed 
+                            ? 'bg-yellow-900/30 text-yellow-400' 
+                            : 'bg-slate-800/30 text-slate-600'
+                        }`}>
                           Testnet
                         </span>
                       )}
                       
-                      {!hasFactory && (
-                        <span className="text-xs text-orange-400">
-                          ⚠️ Factory yok
+                      {isDeployed ? (
+                        <span className="rounded bg-green-900/30 px-1.5 py-0.5 text-xs text-green-400 flex items-center gap-1">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>
+                          Deployed
+                        </span>
+                      ) : (
+                        <span className="rounded bg-slate-800/30 px-1.5 py-0.5 text-xs text-slate-600">
+                          🚧 Coming Soon
                         </span>
                       )}
                     </div>

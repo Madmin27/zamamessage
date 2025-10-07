@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
 import { appConfig } from "../lib/env";
+import { useContractAddress } from "../lib/useContractAddress";
 
 dayjs.extend(duration);
 
@@ -39,6 +40,7 @@ export function MessageCard({
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const client = usePublicClient();
   const { address: userAddress } = useAccount();
+  const contractAddress = useContractAddress();
 
   // Debug: State değişimlerini logla
   useEffect(() => {
@@ -54,36 +56,36 @@ export function MessageCard({
   // Eğer mesaj zaten okunmuşsa (ısRead: true), direkt içeriği yükle
   useEffect(() => {
     const loadContentIfRead = async () => {
-      if (!isRead || isSent || !unlocked || !client || !userAddress) return;
+      if (!isRead || isSent || !unlocked || !client || !userAddress || !contractAddress) return;
       if (messageContent) return; // Zaten yüklenmiş
       
       setIsLoadingContent(true);
       try {
-        console.log("📚 Mesaj zaten okunmuş, içerik yüklenyor...", id.toString());
+        console.log("📚 Message already read, loading content...", id.toString());
         const content = await client.readContract({
-          address: appConfig.contractAddress as `0x${string}`,
+          address: contractAddress,
           abi: chronoMessageV2Abi,
           functionName: "getMessageContent",
           args: [id],
           account: userAddress as `0x${string}`
         }) as string;
         
-        console.log("✅ İçerik yüklendi (isRead):", content);
+        console.log("✅ Content loaded (isRead):", content);
         setMessageContent(content);
         setIsExpanded(true);
       } catch (err) {
-        console.error("❌ İçerik yüklenemedi (isRead):", err);
+        console.error("❌ Content could not be loaded (isRead):", err);
       } finally {
         setIsLoadingContent(false);
       }
     };
     
     loadContentIfRead();
-  }, [isRead, isSent, unlocked, client, userAddress, id, messageContent]);
+  }, [isRead, isSent, unlocked, client, userAddress, id, messageContent, contractAddress]);
 
   // readMessage transaction
   const { data: txData, isLoading: isReading, write: readMessage } = useContractWrite({
-    address: appConfig.contractAddress as `0x${string}`,
+    address: contractAddress,
     abi: chronoMessageV2Abi,
     functionName: "readMessage",
     args: [id]
@@ -96,7 +98,7 @@ export function MessageCard({
   // Transaction başarılı olunca içeriği çek
   useEffect(() => {
     const fetchContent = async () => {
-      if (!isSuccess || !client || !userAddress) return;
+      if (!isSuccess || !client || !userAddress || !contractAddress) return;
       
       setIsLoadingContent(true);
       
@@ -107,42 +109,47 @@ export function MessageCard({
         console.log("🔍 getMessageContent çağrılıyor...", {
           messageId: id.toString(),
           userAddress,
-          contractAddress: appConfig.contractAddress
+          contractAddress
         });
         
         // getMessageContent ile içeriği al (VIEW - gas yok)
         const content = await client.readContract({
-          address: appConfig.contractAddress as `0x${string}`,
+          address: contractAddress,
           abi: chronoMessageV2Abi,
           functionName: "getMessageContent",
           args: [id],
           account: userAddress as `0x${string}`
         }) as string;
 
-        console.log("✅ İçerik alındı:", content);
+        console.log("✅ Content fetched:", content);
         setMessageContent(content);
         setIsExpanded(true);
         console.log("📝 State güncellendi:", { content, isExpanded: true });
         onMessageRead?.();
       } catch (err: any) {
-        console.error("❌ İçerik alınamadı:", err);
+        console.error("❌ Content could not be fetched:", err);
         console.error("Hata detayı:", {
           message: err.message,
           cause: err.cause,
           shortMessage: err.shortMessage
         });
-        setMessageContent("⚠️ İçerik yüklenemedi. Lütfen sayfayı yenileyin.");
+        setMessageContent("⚠️ Content could not be loaded. Please refresh the page.");
       } finally {
         setIsLoadingContent(false);
       }
     };
 
     fetchContent();
-  }, [isSuccess, client, id, onMessageRead, userAddress]);
+  }, [isSuccess, client, id, onMessageRead, userAddress, contractAddress]);
 
   const handleReadClick = () => {
     if (!unlocked) return;
     if (isSent) return;
+    if (!contractAddress) {
+      console.error("❌ Contract address not available");
+      return;
+    }
+    console.log("🔵 Calling readMessage for message #", id.toString());
     readMessage?.();
   };
 
@@ -210,29 +217,29 @@ export function MessageCard({
                 : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
               }
             `}>
-              {unlocked ? '🔓 Açık' : '🔒 Kilitli'}
+              {unlocked ? '🔓 Unlocked' : '🔒 Locked'}
             </div>
           )}
         </div>
         
         {isSent ? (
           <div>
-            <p className="text-sm font-semibold text-blue-300 mb-1">📤 Alıcı</p>
-            <p className="font-mono text-xs text-blue-200/80 break-all">{receiver}</p>
-            <p className="mt-2 text-xs text-blue-400/70 flex items-center gap-1">
-              <span>🔒</span> Sadece alıcı görebilir
+                        <p className="text-sm font-semibold text-blue-300 mb-1">📤 Receiver</p>
+            <p className="font-mono text-xs text-slate-300 break-all">{receiver}</p>
+            <p className="text-xs text-blue-200/60 mt-1">
+              <span>🔒</span> Only receiver can view
             </p>
           </div>
         ) : (
           <div>
-            <p className="text-sm font-semibold text-slate-300 mb-1">📥 Gönderen</p>
+            <p className="text-sm font-semibold text-slate-300 mb-1">📥 Sender</p>
             <p className="font-mono text-xs text-slate-400 break-all">{sender}</p>
           </div>
         )}
         
         <div className="border-t border-slate-700/50 pt-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Kilit:</span>
+            <span className="text-slate-400">Lock:</span>
             <span className="text-slate-300">{unlockDate}</span>
           </div>
           {!unlocked && !isSent && (
@@ -255,14 +262,14 @@ export function MessageCard({
       `}>
         {isSent ? (
           <p className="italic text-blue-300/70 flex items-center gap-2">
-            <span>🚫</span> Gönderdiğiniz mesajı göremezsiniz.
+            <span>🚫</span> You cannot view the message you sent.
           </p>
         ) : unlocked ? (
           <div className="space-y-2">
             {isRead && !messageContent && isLoadingContent ? (
               // Okunan mesaj yükleniyor
               <div className="text-slate-400 italic flex items-center gap-2">
-                <span className="animate-spin">⟳</span> İçerik yükleniyor...
+                <span className="animate-spin">⟳</span> Loading content...
               </div>
             ) : !messageContent && !isExpanded && !isRead ? (
               // Henüz okunmamış, butonu göster
@@ -276,10 +283,10 @@ export function MessageCard({
                 {isReading || isConfirming || isLoadingContent ? (
                   <span className="flex items-center gap-2">
                     <span className="animate-spin">⟳</span> 
-                    {isLoadingContent ? "İçerik yükleniyor..." : "Okunuyor..."}
+                    {isLoadingContent ? "Loading content..." : "Reading..."}
                   </span>
                 ) : (
-                  <span>🔓 Mesajı okumak için tıklayın</span>
+                  <span>🔓 Click to read message</span>
                 )}
               </button>
             ) : messageContent ? (
@@ -288,7 +295,7 @@ export function MessageCard({
                 <p className="text-slate-200 whitespace-pre-wrap">{messageContent}</p>
                 {isRead && (
                   <p className="text-xs text-green-400 flex items-center gap-1">
-                    <span>✓</span> Okundu
+                    <span>✓</span> Read
                   </p>
                 )}
               </div>
@@ -296,7 +303,7 @@ export function MessageCard({
           </div>
         ) : (
           <p className="text-slate-400 italic flex items-center gap-2">
-            <span>⏳</span> Mesaj henüz kilitli
+            <span>⏳</span> Message is still locked
           </p>
         )}
       </div>

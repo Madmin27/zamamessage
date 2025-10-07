@@ -23,12 +23,12 @@ export default function HomePage() {
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white">ChronoMessage</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Zama FHEVM üzerinde zaman kilitli mesajlar oluşturun. Mesajlarınız güvenle saklanır ve belirlediğiniz tarihten
-              önce kimse tarafından açılamaz.
+              Create time-locked messages on Zama FHEVM. Your messages are stored securely and cannot be opened by anyone
+              before the date you specify.
             </p>
           </div>
           <div className="flex flex-col gap-3 md:items-end">
-            <ConnectButton showBalance={false} label="Cüzdanı Bağla" accountStatus="address" chainStatus="icon" />
+            <ConnectButton showBalance={false} label="Connect Wallet" accountStatus="address" chainStatus="icon" />
             <div className="w-full md:w-80">
               <NetworkSwitcher />
             </div>
@@ -39,14 +39,14 @@ export default function HomePage() {
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1fr_1fr]">
   <MessageForm onSubmitted={handleMessageSubmitted} />
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-300 shadow-lg">
-          <h2 className="text-lg font-semibold text-aurora">📌 Nasıl Çalışır?</h2>
+          <h2 className="text-lg font-semibold text-aurora">📌 How It Works?</h2>
           <ol className="mt-4 space-y-2 list-decimal pl-4">
-            <li>Kilit açılma tarihini gelecekte bir zaman olarak seçin.</li>
-            <li>Mesajınızı yazın ve işlemi onaylayın.</li>
-            <li>Belirlenen tarih geldiğinde içerik otomatik olarak görüntülenebilir hâle gelir.</li>
+            <li>Select the unlock date as a future time.</li>
+            <li>Write your message and confirm the transaction.</li>
+            <li>When the specified date arrives, the content becomes automatically viewable.</li>
           </ol>
           <p className="mt-4 text-xs text-slate-400">
-            Not: Daha sonra tam homomorfik şifreleme (FHE) ile içerik zincir üzerinde gizli tutulacaktır.
+            Note: Later, content will be kept private on-chain with Fully Homomorphic Encryption (FHE).
           </p>
         </div>
       </div>

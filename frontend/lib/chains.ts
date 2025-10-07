@@ -11,7 +11,7 @@ export const supportedChains = {
       infura: 'https://sepolia.infura.io/v3/e6aecc89c96940a5a671b2ad96afe68a'
     },
     blockExplorer: 'https://sepolia.etherscan.io',
-    factoryAddress: '0x35925e92e46e207ceCD0b49E76323213007d317e', // ✅ Factory deployed!
+    factoryAddress: '0xA52bD90D699D00781F6610631E22703526c69aF5', // ✅ V2.2 deployed!
     faucet: 'https://sepoliafaucet.com/'
   },
   baseSepolia: {

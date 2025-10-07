@@ -5,10 +5,11 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { useAccount, useContractWrite, useWaitForTransaction } from "wagmi";
+import { useAccount, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
+import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -20,6 +21,9 @@ interface MessageFormProps {
 
 export function MessageForm({ onSubmitted }: MessageFormProps) {
   const { isConnected } = useAccount();
+  const { chain } = useNetwork();
+  const contractAddress = useContractAddress();
+  const hasContract = useHasContract();
   const [receiver, setReceiver] = useState("");
   const [content, setContent] = useState("");
   const [unlockMode, setUnlockMode] = useState<"preset" | "custom">("preset");
@@ -53,7 +57,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   }, []);
 
   const { data, isLoading: isPending, write } = useContractWrite({
-    address: appConfig.contractAddress as `0x${string}`,
+    address: contractAddress,
     abi: chronoMessageV2Abi,
     functionName: "sendMessage"
   });
@@ -103,7 +107,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   useEffect(() => {
     if (isSuccess) {
-      console.log("✅ MessageForm: Mesaj başarıyla gönderildi");
+      console.log("✅ MessageForm: Message sent successfully");
       setReceiver("");
       setContent("");
       setError(null);
@@ -133,11 +137,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     
     // Unlock time validation
     if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
-      setError("Geçerli bir tarih seçin.");
+      setError("Please select a valid date.");
       return;
     }
     if (unlockTimestamp <= Math.floor(Date.now() / 1000)) {
-      setError("Kilit zamanı gelecekte olmalı.");
+      setError("Unlock time must be in the future.");
       return;
     }
 
@@ -151,7 +155,38 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   if (!mounted) {
     return (
       <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-lg backdrop-blur">
-        <p className="text-sm text-slate-400">Yükleniyor...</p>
+        <p className="text-sm text-slate-400">Loading...</p>
+      </div>
+    );
+  }
+
+  // Connect your wallet
+  if (!isConnected) {
+    return (
+      <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-lg backdrop-blur">
+        <p className="text-sm text-slate-400">Connect your wallet...</p>
+      </div>
+    );
+  }
+
+  // Show warning if no contract
+  if (!hasContract || !contractAddress) {
+    return (
+      <div className="space-y-4 rounded-xl border border-orange-700/50 bg-orange-900/20 p-6 shadow-lg backdrop-blur">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <h3 className="font-semibold text-orange-300">No Contract on This Network</h3>
+            <p className="mt-2 text-sm text-orange-200/80">
+              ChronoMessage is not deployed on this network yet. Please select one of the supported networks:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-orange-200/80">
+              <li>✅ Sepolia Testnet</li>
+              <li>✅ Base Sepolia</li>
+              <li>✅ Monad Testnet</li>
+            </ul>
+          </div>
+        </div>
       </div>
     );
   }
@@ -163,7 +198,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right duration-300">
           <div className="rounded-lg border border-green-500/50 bg-green-900/80 px-4 py-3 shadow-lg backdrop-blur-sm">
             <p className="text-green-100 flex items-center gap-2">
-              <span>✅</span> Mesaj başarıyla gönderildi!
+              <span>✅</span> Message sent successfully!
             </p>
           </div>
         </div>
@@ -175,7 +210,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       >
       <div className="flex flex-col gap-2">
         <label htmlFor="receiver" className="text-sm font-semibold uppercase tracking-wide text-aurora">
-          Alıcı Adresi (Receiver)
+          Receiver Address
         </label>
         <input
           id="receiver"
@@ -186,13 +221,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           className="rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition focus:border-aurora focus:ring-2 focus:ring-aurora/60"
         />
         <p className="text-xs text-slate-400">
-          🔒 Sadece bu adres mesajı okuyabilecek (gönderen bile göremez!)
+          🔒 Only this address can read the message (not even the sender!)
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
         <label htmlFor="content" className="text-sm font-semibold uppercase tracking-wide text-aurora">
-          Mesaj
+          Message
         </label>
         <textarea
           id="content"
@@ -203,13 +238,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         />
       </div>
       
-      {/* Kilit Zamanı Seçimi */}
+      {/* Unlock Time Selection */}
       <div className="flex flex-col gap-3">
         <label className="text-sm font-semibold uppercase tracking-wide text-aurora">
-          ⏰ Kilit Açılma Zamanı
+          ⏰ Unlock Time
         </label>
         
-        {/* Mode Seçimi */}
+        {/* Mode Selection */}
         <div className="flex gap-2">
           <button
             type="button"
@@ -220,7 +255,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                 : "bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-slate-200"
             }`}
           >
-            ⚡ Hızlı Seçim
+            ⚡ Quick Select
           </button>
           <button
             type="button"
@@ -231,7 +266,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                 : "bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-slate-200"
             }`}
           >
-            📅 Özel Tarih
+            📅 Custom Date
           </button>
         </div>
 
@@ -239,18 +274,18 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         {unlockMode === "preset" && (
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: "⚡ Now (10sn)", value: 10 },
-              { label: "30 saniye", value: 30 },
-              { label: "1 dakika", value: 60 },
-              { label: "5 dakika", value: 300 },
-              { label: "15 dakika", value: 900 },
-              { label: "1 saat", value: 3600 },
-              { label: "2 saat", value: 7200 },
-              { label: "6 saat", value: 21600 },
-              { label: "1 gün", value: 86400 },
-              { label: "3 gün", value: 259200 },
-              { label: "1 hafta", value: 604800 },
-              { label: "1 ay", value: 2592000 }
+              { label: "⚡ Now (10s)", value: 10 },
+              { label: "30 seconds", value: 30 },
+              { label: "1 minute", value: 60 },
+              { label: "5 minutes", value: 300 },
+              { label: "15 minutes", value: 900 },
+              { label: "1 hour", value: 3600 },
+              { label: "2 hours", value: 7200 },
+              { label: "6 hours", value: 21600 },
+              { label: "1 day", value: 86400 },
+              { label: "3 days", value: 259200 },
+              { label: "1 week", value: 604800 },
+              { label: "1 month", value: 2592000 }
             ].map(({ label, value }) => (
               <button
                 key={value}
@@ -312,13 +347,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                   <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
                   <option value="Asia/Shanghai">Shanghai (UTC+8)</option>
                 </optgroup>
-                <optgroup label="🌍 Diğer">
-                  <option value="UTC">UTC (Evrensel Saat)</option>
+                <optgroup label="🌍 Other">
+                  <option value="UTC">UTC (Universal Time)</option>
                   <option value="Australia/Sydney">Sydney (UTC+10)</option>
                 </optgroup>
               </select>
               <p className="text-xs text-slate-500 italic">
-                💡 Girdiğiniz tarih/saat bu saat dilimine göre yorumlanır
+                💡 The date/time you enter will be interpreted in this timezone
               </p>
             </div>
           </div>
@@ -329,25 +364,25 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-3 space-y-2 text-xs">
             {unlockMode === "custom" && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">🕒 Seçili Saat Dilimi:</span>
+                <span className="text-slate-400">🕒 Selected Timezone:</span>
                 <span className="text-sunset font-mono font-semibold">{unlockTimeDisplay.selected}</span>
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">🌍 Sizin Saatiniz:</span>
+              <span className="text-slate-400">🌍 Your Time:</span>
               <span className="text-slate-200 font-mono">{unlockTimeDisplay.local}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">🌐 Evrensel Saat (UTC):</span>
+              <span className="text-slate-400">🌐 Universal Time (UTC):</span>
               <span className="text-slate-200 font-mono">{unlockTimeDisplay.utc}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">⏱️ Kalan Süre:</span>
+              <span className="text-slate-400">⏱️ Time Remaining:</span>
               <span className="text-green-400 font-semibold">{unlockTimeDisplay.relative}</span>
             </div>
             <div className="pt-2 border-t border-slate-700">
               <p className="text-slate-500 italic">
-                ℹ️ Blockchain UTC saati kullanır. Alıcı hangi ülkeden olursa olsun, bu UTC zamanında mesaj açılır.
+                ℹ️ Blockchain uses UTC time. The message will unlock at this UTC time regardless of the recipient's location.
               </p>
             </div>
           </div>
@@ -359,7 +394,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         disabled={isPending || isConfirming}
         className="w-full rounded-lg bg-gradient-to-r from-aurora via-sky-500 to-sunset px-4 py-3 text-center text-sm font-semibold uppercase tracking-widest text-slate-900 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isPending || isConfirming ? "İşlem gönderiliyor..." : "Mesajı Gönder"}
+        {isPending || isConfirming ? "Sending transaction..." : "Send Message"}
       </button>
       {data?.hash ? (
         <p className="text-xs text-slate-400">

@@ -61,7 +61,7 @@ async function fetchMessage(
 
     let content: string | null = null;
     if (unlocked && !isSent) {
-      content = "[Mesajı okumak için tıklayın]";
+      content = "[Click to read message]";
     }
 
     const unlockDate = dayjs(Number(unlockTime) * 1000);
@@ -167,7 +167,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
       
       if (newlyUnlocked.length > 0) {
         newlyUnlocked.forEach(msg => {
-          showToast(`🔓 Mesaj #${msg.id} açıldı! Okuyabilirsiniz.`, 'success');
+          showToast(`🔓 Message #${msg.id} unlocked! You can read it now.`, 'success');
           setUnlockedMessageIds(prev => new Set(prev).add(msg.id.toString()));
         });
       }
@@ -176,7 +176,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
       setLastUpdated(new Date());
     } catch (err: any) {
       console.error("MessageList error:", err);
-      setError(`Hata: ${err.message || "Mesajlar yüklenirken hata oluştu"}. Lütfen sayfayı yenileyin.`);
+      setError(`Error: ${err.message || "An error occurred while loading messages"}. Please refresh the page.`);
     } finally {
       setLoading(false);
     }
@@ -199,39 +199,38 @@ export function MessageList({ refreshKey }: MessageListProps) {
     return () => clearInterval(interval);
   }, [mounted, client, hasContract, contractAddress, userAddress, loadMessages]);
 
-  if (!mounted || !userAddress) {
+  if (!mounted) {
     return (
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-sm text-slate-400">
-        <p>Cüzdanınızı bağlayın...</p>
+        <p>Loading...</p>
       </div>
     );
   }
 
-  // Kontrat deploy edilmemiş ağ için uyarı
+  if (!userAddress) {
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-sm text-slate-400">
+        <p>Connect your wallet...</p>
+      </div>
+    );
+  }
+
+  // Warning for networks without deployed contract
   if (!hasContract || !contractAddress) {
     return (
-      <div className="rounded-xl border border-yellow-500/30 bg-yellow-900/20 p-6">
+      <div className="rounded-xl border border-orange-700/50 bg-orange-900/20 p-6 shadow-lg backdrop-blur">
         <div className="flex items-start gap-3">
           <span className="text-2xl">⚠️</span>
           <div>
-            <h3 className="text-lg font-semibold text-yellow-200">
-              Bu ağda kontrat henüz deploy edilmedi
-            </h3>
-            <p className="mt-2 text-sm text-yellow-300/80">
-              <strong>{chain?.name || "Bu ağ"}</strong> ağında ChronoMessage kontratı bulunmuyor.
+            <h3 className="font-semibold text-orange-300">Contract not deployed on this network yet</h3>
+            <p className="mt-2 text-sm text-orange-200/80">
+              ChronoMessage is active on these networks:
             </p>
-            <p className="mt-2 text-sm text-yellow-300/80">
-              Mesaj göndermek ve görüntülemek için kontratın deploy edildiği bir ağa geçin:
-            </p>
-            <ul className="mt-3 space-y-1 text-sm text-yellow-200">
-              <li>✅ <strong>Sepolia</strong> - Kontrat aktif</li>
-              <li>✅ <strong>Base Sepolia</strong> - Kontrat aktif</li>
-              <li>✅ <strong>Monad Testnet</strong> - Kontrat aktif</li>
-              <li>❌ Diğer ağlar - Henüz deploy edilmedi</li>
+            <ul className="mt-2 space-y-1 text-sm text-orange-200/80">
+              <li>✅ Sepolia Testnet</li>
+              <li>✅ Base Sepolia</li>
+              <li>✅ Monad Testnet</li>
             </ul>
-            <p className="mt-3 text-xs text-yellow-400/70">
-              💡 Üstteki <strong>Ağ Seçimi</strong> dropdown'ından Sepolia veya Base Sepolia'ya geçebilirsiniz.
-            </p>
           </div>
         </div>
       </div>
@@ -259,7 +258,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-aurora">Mesajlar</h2>
+        <h2 className="text-lg font-semibold text-aurora">Messages</h2>
         <button
           onClick={loadMessages}
           disabled={loading}
@@ -269,7 +268,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          {loading ? "⟳" : "Yenile"}
+          {loading ? "⟳" : "Refresh"}
         </button>
       </div>
 
@@ -286,7 +285,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
       ) : items.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-center text-sm text-slate-300">
           <p className="mb-2 text-4xl">📭</p>
-          <p>Henüz mesaj yok.</p>
+          <p>No messages yet.</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
