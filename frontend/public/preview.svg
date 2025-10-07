@@ -37,7 +37,7 @@
   
   <!-- Text -->
   <text x="600" y="550" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">
-    ChronoMessage
+    SealedMessage
   </text>
   
   <text x="600" y="620" font-family="Arial, sans-serif" font-size="36" fill="#94a3b8" text-anchor="middle">

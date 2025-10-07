@@ -1,5 +1,5 @@
 {
-  "name": "ChronoMessage",
+  "name": "SealedMessage",
   "description": "Time-locked encrypted messages on Base. Send messages that can only be read after a specific time.",
   "icon": "https://zama.minen.com.tr/icon.png",
   "url": "https://zama.minen.com.tr",
@@ -15,7 +15,7 @@
   ],
   "version": "1.0.0",
   "author": {
-    "name": "ChronoMessage Team",
+    "name": "SealedMessage Team",
     "url": "https://zama.minen.com.tr"
   },
   "social": {

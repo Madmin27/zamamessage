@@ -5,7 +5,7 @@ import { Providers } from "../components/Providers";
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://zama.minen.com.tr'),
-  title: "ChronoMessage | Time-Locked Messages",
+  title: "SealedMessage | Time-Locked Messages",
   description: "Send encrypted time-locked messages on Base. Messages can only be read after the specified unlock time.",
   manifest: "/manifest.json",
   icons: {
@@ -13,16 +13,16 @@ export const metadata: Metadata = {
     apple: "/icon.svg"
   },
   openGraph: {
-    title: "ChronoMessage",
+    title: "SealedMessage",
     description: "Time-locked encrypted messages on Base blockchain",
     url: "https://zama.minen.com.tr",
-    siteName: "ChronoMessage",
+    siteName: "SealedMessage",
     images: [
       {
         url: "/preview.png",
         width: 1200,
         height: 800,
-        alt: "ChronoMessage - Time-Locked Messages on Base"
+        alt: "SealedMessage - Time-Locked Messages on Base"
       }
     ],
     locale: "en_US",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ChronoMessage",
+    title: "SealedMessage",
     description: "Time-locked encrypted messages on Base blockchain",
     images: ["/preview.png"]
   },

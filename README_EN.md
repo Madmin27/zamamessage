@@ -1,4 +1,4 @@
-# 🔐 ChronoMessage - Time-Locked Messages on Base
+# 🔐 SealedMessage - Time-Locked Messages on Base
 
 **Time-locked encrypted messaging dApp** built with privacy-first architecture on Base blockchain.
 
@@ -40,7 +40,7 @@ The Mini App preview will appear automatically!
 
 ## 📱 Farcaster Mini App
 
-ChronoMessage is available as a Farcaster Mini App with:
+SealedMessage is available as a Farcaster Mini App with:
 - ✅ Manifest configuration for Base networks
 - ✅ Open Graph preview cards
 - ✅ Frame support with interactive buttons

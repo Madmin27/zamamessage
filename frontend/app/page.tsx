@@ -21,7 +21,7 @@ export default function HomePage() {
       <header className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-white">ChronoMessage</h1>
+            <h1 className="text-3xl font-black tracking-tight text-white">SealedMessage</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
               Create time-locked messages on Zama FHEVM. Your messages are stored securely and cannot be opened by anyone
               before the date you specify.

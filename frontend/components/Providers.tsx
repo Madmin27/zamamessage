@@ -52,7 +52,7 @@ export function Providers({ children }: PropsWithChildren) {
       groupName: "Önerilen",
       wallets: [
         injectedWallet({ chains }),
-        metaMaskWallet({ chains, projectId: "chronomessage" })
+        metaMaskWallet({ chains, projectId: "sealedmessage" })
       ]
     }
   ]);

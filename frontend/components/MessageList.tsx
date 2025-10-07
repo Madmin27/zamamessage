@@ -224,7 +224,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
           <div>
             <h3 className="font-semibold text-orange-300">Contract not deployed on this network yet</h3>
             <p className="mt-2 text-sm text-orange-200/80">
-              ChronoMessage is active on these networks:
+              SealedMessage is active on these networks:
             </p>
             <ul className="mt-2 space-y-1 text-sm text-orange-200/80">
               <li>✅ Sepolia Testnet</li>

@@ -178,7 +178,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           <div>
             <h3 className="font-semibold text-orange-300">No Contract on This Network</h3>
             <p className="mt-2 text-sm text-orange-200/80">
-              ChronoMessage is not deployed on this network yet. Please select one of the supported networks:
+              SealedMessage is not deployed on this network yet. Please select one of the supported networks:
             </p>
             <ul className="mt-2 space-y-1 text-sm text-orange-200/80">
               <li>✅ Sepolia Testnet</li>
