@@ -1,292 +1,101 @@
-# 🔐 ChronoMessage - Zama FHE ile Zaman Kilitli Mesajlaşma
+# 🔐 SealedMessage
 
-**Fully Homomorphic Encryption (FHE)** teknolojisi ile şifreli, zaman kilitli mesajlaşma dApp'i.
+**When conditions intersect, the seal breaks.**
 
-![Zama FHE](https://img.shields.io/badge/Zama-FHE%20Enabled-blue?style=for-the-badge&logo=ethereum)
-![Tests](https://img.shields.io/badge/tests-13%20passing-success?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-informational?style=for-the-badge)
+Time-locked encrypted messaging dApp built on Base blockchain.
 
-## ✨ Özellikler
+![Base](https://img.shields.io/badge/Base-Sepolia-blue?style=for-the-badge&logo=ethereum)
+![Farcaster](https://img.shields.io/badge/Farcaster-Mini%20App-purple?style=for-the-badge)
+![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js)
 
-- 🔒 **Zama FHE Şifreleme** - Mesajlar `euint256` ile blockchain'de şifreli saklanır
-- ⏰ **Time-Locked Messaging** - Mesajlar belirli zamanda açılır
-- 🛡️ **Access Control** - Sadece gönderen kişi mesajı okuyabilir
-- 🌐 **Multi-Chain Ready** - Sepolia testnet (şu an), diğer EVM ağları (gelecekte)
-- ✅ **Production Ready** - 13/13 test geçiyor, deployment scripts hazır
+## 🌟 Live Demo
 
-## 🚀 Hızlı Başlangıç
+**🔗 [zama.minen.com.tr](https://zama.minen.com.tr)**
 
-### 1. Kurulum
+**🎭 Farcaster Mini App**: Share the URL on Warpcast!
+
+## ✨ Features
+
+- ⏰ **Time-Locked Messages** - Messages unlock at a specific future time
+- 🔐 **Receiver-Only Privacy** - Only the receiver can read the message content
+- 🌐 **Multi-Chain Support** - Base Sepolia, Ethereum Sepolia, Monad Testnet
+- 🎭 **Farcaster Integration** - Native Mini App with SDK support
+- 🎨 **Beautiful UI** - Dark theme with aurora gradients
+- 📱 **Mobile Optimized** - Responsive design
+- 🦊 **MetaMask Integration** - RainbowKit wallet connection
+
+## 🚀 Quick Start
+
+### Try It Now
+1. Visit [zama.minen.com.tr](https://zama.minen.com.tr)
+2. Connect your wallet (MetaMask)
+3. Switch to Base Sepolia or Sepolia testnet
+4. Send a time-locked message!
+
+### Local Development
+
 ```bash
-# Dependencies'i yükleyin
+# Clone repository
+git clone https://github.com/Madmin27/zamamessage.git
+cd zamamessage
+
+# Install dependencies
 npm install
+cd frontend && npm install
 
-# Contract'ları derleyin
-npx hardhat compile
+# Start frontend
+npm run dev
 ```
 
-### 2. Local Test (Mock FHEVM)
-```bash
-# Testleri çalıştırın
-npx hardhat test
+## 📱 Farcaster Mini App
 
-# Beklenen: 13 passing ✅
-```
+SealedMessage is a verified Farcaster Mini App:
+- ✅ Account association verified (FID: 599667)
+- ✅ Base Builder integration
+- ✅ SDK ready() implementation
+- ✅ Open Graph preview cards
+- ✅ Native wallet integration
 
-### 3. Sepolia Testnet'e Deploy
-```bash
-# 1. .env dosyasını ayarlayın
-cp .env.example .env
-nano .env
+[📖 Read Farcaster Guide →](./ACCOUNT_ASSOCIATION_GUIDE.md)
 
-# 2. Sepolia ETH alın (faucet)
-# https://sepoliafaucet.com/
+## 🔗 Deployed Contracts
 
-# 3. Deployment kontrolü
-./check-zama.sh
+| Network | Address | Chain ID |
+|---------|---------|----------|
+| **Sepolia** | `0xA52bD90D699D00781F6610631E22703526c69aF5` | 11155111 |
+| **Base Sepolia** | `0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5` | 84532 |
+| **Monad Testnet** | `0xD7DE0BB23A63F920E11aaDcB77932D2f5fe4738b` | 10200 |
 
-# 4. Deploy edin!
-npx hardhat run scripts/deploy-zama.ts --network sepolia
+## 🛠️ Tech Stack
 
-# 5. Verify edin
-npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
-```
+- **Frontend**: Next.js 14.2, React 18, TailwindCSS
+- **Web3**: wagmi v1, RainbowKit, ethers v6
+- **SDK**: @farcaster/frame-sdk
+- **Smart Contracts**: Solidity, Hardhat
+- **Deployment**: Base, Ethereum, Monad
 
-Detaylı kurulum için: [ZAMA_TESTNET.md](./ZAMA_TESTNET.md)
+## 📚 Documentation
 
-## 📁 Proje Yapısı
+- [Farcaster Mini App Guide](./ACCOUNT_ASSOCIATION_GUIDE.md)
+- [Multi-Chain Deployment](./MULTICHAIN_V2.2.md)
+- [English README](./README_EN.md)
 
-```
-.
-├── contracts/                    # Solidity akıllı kontratlar
-│   ├── ChronoMessage.sol              # V1 - düz metin (deprecated)
-│   ├── ChronoMessageFHE.sol           # V2 - FHE (deprecated)
-│   └── ChronoMessageZama.sol          # ✅ V3 - Zama FHE (ACTIVE)
-├── test/                         # Hardhat testleri
-│   ├── ChronoMessage.test.ts
-│   └── ChronoMessageZama.test.ts      # ✅ 13/13 passing
-├── scripts/                      # Deploy scriptleri
-│   ├── deploy.ts                      # Genel deployment
-│   └── deploy-zama.ts                 # ✅ Sepolia Zama deployment
-├── fhevmTemp/                    # Zama FHE config dosyaları
-├── check-zama.sh                 # ✅ Deployment validation script
-├── ZAMA_TESTNET.md               # ✅ Sepolia deployment rehberi
-├── frontend/                     # Next.js dApp (FHE integration gerekli)
-│   ├── app/                           # Next.js App Router
-│   ├── components/                    # React bileşenleri
-│   └── lib/                           # Utilities
-└── README.md                     # ← Bu dosya
-```
-## 🧪 Testing
+## �� Roadmap
 
-### Unit Tests
-
-```bash
-# Tüm testleri çalıştır
-npx hardhat test
-
-# Sadece Zama FHE testleri
-npx hardhat test test/ChronoMessageZama.test.ts
-
-# Coverage (opsiyonel)
-npx hardhat coverage
-```
-
-### Test Sonuçları ✅
-
-```
-ChronoMessageZama (Zama FHE)
-  Deployment
-    ✔ should deploy successfully
-    ✔ should have zero messages initially
-  Send Message (FHE Encrypted)
-    ✔ should send an encrypted message with future unlock time
-    ✔ should reject message with past unlock time
-    ✔ should emit MessageSent event
-  Read Message (FHE Decryption)
-    ✔ should not allow reading before unlock time
-    ✔ should allow sender to read message after unlock time
-    ✔ should not allow non-sender to read message
-    ✔ should reject reading non-existent message
-  Metadata Functions
-    ✔ should return correct metadata
-    ✔ should track user message count
-    ✔ should correctly report message lock status
-  Multiple Messages
-    ✔ should handle multiple messages from different users
-
-13 passing (154ms)
-```
-
-## 🔬 Teknik Detaylar
-
-### Smart Contract Mimarisi
-
-```solidity
-// ChronoMessageZama.sol
-contract ChronoMessageZama is SepoliaConfig {
-    struct Message {
-        address sender;
-        uint256 unlockTime;
-        euint256 encryptedContent;  // FHE ile şifreli
-        bool exists;
-    }
-    
-    function sendMessage(externalEuint256, bytes, uint256) external;
-    function readMessage(uint256) external view returns (euint256);
-    function getMessageMetadata(uint256) external view;
-}
-```
-
-### FHE Encryption Flow
-
-```
-┌─────────────┐
-│  Frontend   │  User yazar mesajı
-└──────┬──────┘
-       │ 
-       ▼
-┌─────────────┐
-│  fhevmjs    │  Encrypt (client-side)
-│  encrypt()  │
-└──────┬──────┘
-       │ encryptedContent + inputProof
-       ▼
-┌─────────────┐
-│  Contract   │  FHE.fromExternal()
-│  (Sepolia)  │  FHE.allowThis()
-└──────┬──────┘
-       │ Blockchain'de şifreli saklanır
-       ▼
-┌─────────────┐
-│  Storage    │  euint256 (256-bit encrypted)
-│  (FHE)      │
-└─────────────┘
-       │ unlock_time > block.timestamp ✅
-       ▼
-┌─────────────┐
-│  Frontend   │  Decrypt (sadece sender)
-│  decrypt()  │
-└─────────────┘
-```
-
-### Teknoloji Stack
-
-| Katman | Teknoloji | Versiyon |
-|--------|-----------|----------|
-| **Smart Contract** | Solidity | 0.8.24 |
-| **FHE Library** | @fhevm/solidity | latest |
-| **Blockchain** | Ethereum Sepolia | Testnet |
-| **Development** | Hardhat | 2.22.x |
-| **Testing** | Chai + Mocha | - |
-| **Frontend** | Next.js 14 | (integration needed) |
-| **Web3** | ethers.js | 6.x |
-
-## 📖 Detaylı Dokümantasyon
-
-- **[ZAMA_TESTNET.md](ZAMA_TESTNET.md)** - Sepolia deployment tam rehberi
-- **[MULTICHAIN_GUIDE.md](MULTICHAIN_GUIDE.md)** - Multi-chain deployment
-- **[USAGE.md](USAGE.md)** - Kullanım kılavuzu
-- **[QUICKSTART.md](QUICKSTART.md)** - 5 dakikada başlangıç
-
-## 🔮 Roadmap
-
-### Phase 1: MVP ✅ (Tamamlandı)
-- [x] Zama FHE integration
-- [x] Basic time-locked messaging
-- [x] Unit tests (13/13 passing)
-- [x] Sepolia deployment scripts
-
-### Phase 2: Frontend 🔄 (Devam ediyor)
-- [ ] Next.js frontend with fhevmjs
-- [ ] MetaMask integration
-- [ ] Message list UI
-- [ ] Encryption/decryption UX
-
-### Phase 3: Advanced Features ⏳ (Planned)
-- [ ] Multi-recipient messages
-- [ ] NFT-gated messages
-- [ ] Event-triggered unlocks
-- [ ] Gas optimization
-
-### Phase 4: Production 🔮 (Future)
-- [ ] Mainnet deployment
-- [ ] Security audit
-- [ ] Advanced access control
-- [ ] Mobile app
-
-## 💰 Gas Costs (Tahmini)
-
-| İşlem | Gas | Sepolia ETH | USD (gas=30 gwei) |
-|-------|-----|-------------|-------------------|
-| **Deploy** | ~2,500,000 | 0.075 | ~$0 (testnet) |
-| **Send Message** | ~500,000 | 0.015 | ~$0 (testnet) |
-| **Read Message** | ~100,000 | 0.003 | ~$0 (testnet) |
-
-**Not:** Mainnet'te FHE operations daha pahalı olabilir. Optimization gerekli.
-
-## 🔒 Güvenlik
-
-### Access Control
-
-```solidity
-// Contract seviyesinde
-FHE.allowThis(encrypted);    // Contract okuyabilir
-FHE.allow(encrypted, sender); // Gönderen okuyabilir
-
-// Okuma kontrolü
-require(msg.sender == m.sender, "Only sender can read");
-```
-
-### Best Practices
-
-- ✅ Private key'leri `.env` dosyasında (gitignore'da)
-- ✅ Test ağlarında önce test edin
-- ✅ Contract verification yapın (Etherscan)
-- ✅ Minimum bakiye kontrolü (deployment öncesi)
-- ⚠️ Mainnet'te ASLA test private key kullanmayın!
-
-## 💡 Use Cases
-
-- **Time Capsule**: Geleceğe mesaj bırakın
-- **Scheduled Announcements**: Belirli zamanda açılan duyurular
-- **Will/Testament**: Dijital vasiyet
-- **Future Trading Signals**: Zaman kilitli trading önerileri
-- **Secret Santa**: Zamanlı hediye mesajları
-
-## 🤝 Contributing
-
-Katkıda bulunmak için:
-
-1. Fork edin
-2. Feature branch oluşturun (`git checkout -b feature/AmazingFeature`)
-3. Commit edin (`git commit -m 'Add some AmazingFeature'`)
-4. Push edin (`git push origin feature/AmazingFeature`)
-5. Pull Request açın
-
-## 📚 Kaynaklar
-
-### Zama FHE
-
-- **Docs**: https://docs.zama.ai/fhevm
-- **GitHub**: https://github.com/zama-ai/fhevm
-- **Discord**: https://discord.com/invite/zama
-- **Forum**: https://community.zama.ai/
-
-### Ethereum
-
-- **Sepolia Faucet**: https://sepoliafaucet.com/
-- **Sepolia Explorer**: https://sepolia.etherscan.io/
-- **Alchemy**: https://www.alchemy.com/
-- **Infura**: https://infura.io/
+- [ ] FHE (Fully Homomorphic Encryption) integration
+- [ ] Additional chain support (Linea, Arbitrum, Optimism)
+- [ ] Notification system via webhooks
+- [ ] Screenshot gallery for App Store
+- [ ] Mobile app wrapper
 
 ## 📄 License
 
-MIT License - detaylar için [LICENSE](LICENSE) dosyasına bakın.
+MIT
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-**Built with ❤️ using Zama FHE Technology** 🔐
-
-**Not**: Proje production-ready durumda. Sepolia deployment için .env ayarları yapılması gerekiyor.
-# zamamessage
+**Built with 🔐 by SealedMessage Team**
