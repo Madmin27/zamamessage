@@ -5,10 +5,11 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import advancedFormat from "dayjs/plugin/advancedFormat";
 import duration from "dayjs/plugin/duration";
-import { usePublicClient, useAccount } from "wagmi";
+import { usePublicClient, useAccount, useNetwork } from "wagmi";
 import type { PublicClient } from "viem";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
 import { appConfig } from "../lib/env";
+import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 import { MessageCard } from "./MessageCard";
 
 dayjs.extend(relativeTime);
@@ -40,13 +41,14 @@ interface Toast {
 
 async function fetchMessage(
   client: PublicClient,
+  contractAddress: `0x${string}`,
   id: bigint,
   userAddress: string,
   account?: `0x${string}`
 ): Promise<MessageViewModel | null> {
   try {
     const [sender, receiver, unlockTime, isRead] = (await client.readContract({
-      address: appConfig.contractAddress as `0x${string}`,
+      address: contractAddress,
       abi: chronoMessageV2Abi,
       functionName: "getMessageMetadata",
       args: [id],
@@ -89,6 +91,9 @@ async function fetchMessage(
 export function MessageList({ refreshKey }: MessageListProps) {
   const client = usePublicClient();
   const { address: userAddress } = useAccount();
+  const { chain } = useNetwork();
+  const contractAddress = useContractAddress();
+  const hasContract = useHasContract();
   const [items, setItems] = useState<MessageViewModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,11 +101,6 @@ export function MessageList({ refreshKey }: MessageListProps) {
   const [mounted, setMounted] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unlockedMessageIds, setUnlockedMessageIds] = useState<Set<string>>(new Set());
-
-  const contractSet = useMemo(
-    () => appConfig.contractAddress !== "0x0000000000000000000000000000000000000000",
-    []
-  );
 
   useEffect(() => {
     setMounted(true);
@@ -116,7 +116,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
   }, []);
 
   const loadMessages = useCallback(async () => {
-    if (!client || !contractSet || !userAddress) {
+    if (!client || !hasContract || !contractAddress || !userAddress) {
       return;
     }
 
@@ -126,14 +126,14 @@ export function MessageList({ refreshKey }: MessageListProps) {
     try {
       // Kullanıcının gönderdiği ve aldığı mesaj ID'lerini al
       const sentIds = (await client.readContract({
-        address: appConfig.contractAddress as `0x${string}`,
+        address: contractAddress,
         abi: chronoMessageV2Abi,
         functionName: "getSentMessages",
         args: [userAddress as `0x${string}`]
       })) as bigint[];
 
       const receivedIds = (await client.readContract({
-        address: appConfig.contractAddress as `0x${string}`,
+        address: contractAddress,
         abi: chronoMessageV2Abi,
         functionName: "getReceivedMessages",
         args: [userAddress as `0x${string}`]
@@ -151,7 +151,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
 
       // Mesajları yükle - userAddress'i account parametresi olarak geç
       const results = await Promise.all(
-        allIds.map((id) => fetchMessage(client, id, userAddress, userAddress as `0x${string}`))
+        allIds.map((id) => fetchMessage(client, contractAddress, id, userAddress, userAddress as `0x${string}`))
       );
       
       // Null değerleri filtrele (yetki hatası olanlar)
@@ -180,29 +180,59 @@ export function MessageList({ refreshKey }: MessageListProps) {
     } finally {
       setLoading(false);
     }
-  }, [client, contractSet, userAddress, unlockedMessageIds, showToast]);
+  }, [client, hasContract, contractAddress, userAddress, unlockedMessageIds, showToast]);
 
   useEffect(() => {
-    if (mounted && client && contractSet && userAddress) {
+    if (mounted && client && hasContract && contractAddress && userAddress) {
       loadMessages();
     }
-  }, [refreshKey, mounted, client, contractSet, userAddress, loadMessages]);
+  }, [refreshKey, mounted, client, hasContract, contractAddress, userAddress, loadMessages]);
 
   // Otomatik yenileme (30 saniyede bir unlock kontrolü)
   useEffect(() => {
-    if (!mounted || !client || !contractSet || !userAddress) return;
+    if (!mounted || !client || !hasContract || !contractAddress || !userAddress) return;
     
     const interval = setInterval(() => {
       loadMessages();
     }, 30000); // 30 saniye
 
     return () => clearInterval(interval);
-  }, [mounted, client, contractSet, userAddress, loadMessages]);
+  }, [mounted, client, hasContract, contractAddress, userAddress, loadMessages]);
 
   if (!mounted || !userAddress) {
     return (
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-sm text-slate-400">
         <p>Cüzdanınızı bağlayın...</p>
+      </div>
+    );
+  }
+
+  // Kontrat deploy edilmemiş ağ için uyarı
+  if (!hasContract || !contractAddress) {
+    return (
+      <div className="rounded-xl border border-yellow-500/30 bg-yellow-900/20 p-6">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <h3 className="text-lg font-semibold text-yellow-200">
+              Bu ağda kontrat henüz deploy edilmedi
+            </h3>
+            <p className="mt-2 text-sm text-yellow-300/80">
+              <strong>{chain?.name || "Bu ağ"}</strong> ağında ChronoMessage kontratı bulunmuyor.
+            </p>
+            <p className="mt-2 text-sm text-yellow-300/80">
+              Mesaj göndermek ve görüntülemek için kontratın deploy edildiği bir ağa geçin:
+            </p>
+            <ul className="mt-3 space-y-1 text-sm text-yellow-200">
+              <li>✅ <strong>Sepolia</strong> - Kontrat aktif</li>
+              <li>✅ <strong>Base Sepolia</strong> - Kontrat aktif</li>
+              <li>❌ Diğer ağlar - Henüz deploy edilmedi</li>
+            </ul>
+            <p className="mt-3 text-xs text-yellow-400/70">
+              💡 Üstteki <strong>Ağ Seçimi</strong> dropdown'ından Sepolia veya Base Sepolia'ya geçebilirsiniz.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
