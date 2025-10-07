@@ -233,7 +233,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           id="content"
           value={content}
           onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setContent(event.target.value)}
-          placeholder="Zaman kapsülüne ne bırakmak istersiniz?"
+          placeholder="Write and Seal"
           className="min-h-[120px] rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-slate-100 outline-none transition focus:border-aurora focus:ring-2 focus:ring-aurora/60"
         />
       </div>
