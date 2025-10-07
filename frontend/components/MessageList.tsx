@@ -226,6 +226,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
             <ul className="mt-3 space-y-1 text-sm text-yellow-200">
               <li>✅ <strong>Sepolia</strong> - Kontrat aktif</li>
               <li>✅ <strong>Base Sepolia</strong> - Kontrat aktif</li>
+              <li>✅ <strong>Monad Testnet</strong> - Kontrat aktif</li>
               <li>❌ Diğer ağlar - Henüz deploy edilmedi</li>
             </ul>
             <p className="mt-3 text-xs text-yellow-400/70">

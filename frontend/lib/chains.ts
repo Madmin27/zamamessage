@@ -85,17 +85,17 @@ export const supportedChains = {
     faucet: 'https://faucet.polygon.technology/'
   },
   monadTestnet: {
-    id: 41454,
+    id: 10143,
     name: 'Monad Testnet',
     network: 'monad-testnet',
     testnet: true,
     nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
     rpcUrls: {
-      default: 'https://testnet.monad.xyz',
-      public: 'https://testnet.monad.xyz'
+      default: 'https://rpc.ankr.com/monad_testnet',
+      public: 'https://monad-testnet.drpc.org'
     },
-    blockExplorer: 'https://testnet.monad.xyz',
-    factoryAddress: '0x0000000000000000000000000000000000000000',
+    blockExplorer: 'https://explorer.testnet.monad.xyz',
+    factoryAddress: '0xD7DE0BB23A63F920E11aaDcB77932D2f5fe4738b', // ✅ Deployed!
     faucet: 'https://faucet.monad.xyz/'
   },
   base: {

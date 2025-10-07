@@ -92,6 +92,15 @@ if (process.env.OPTIMISM_SEPOLIA_RPC_URL && privateKey) {
   };
 }
 
+// Monad Testnet
+if (process.env.MONAD_TESTNET_RPC_URL && privateKey) {
+  networks.monadTestnet = {
+    url: process.env.MONAD_TESTNET_RPC_URL,
+    accounts: [privateKey],
+    chainId: 10143
+  };
+}
+
 // Polygon Mainnet
 if (process.env.POLYGON_RPC_URL && privateKey) {
   networks.polygon = {
