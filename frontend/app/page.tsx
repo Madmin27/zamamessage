@@ -19,11 +19,11 @@ export default function HomePage() {
 
   return (
     <main className="flex flex-1 flex-col gap-6">
-      <header className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg">
+      <header className="flex flex-col gap-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-white">SealedMessage</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+            <h1 className="text-3xl font-black tracking-tight text-cyber-blue">SealedMessage</h1>
+            <p className="mt-2 max-w-2xl text-sm text-text-light/80">
               When conditions intersect, the seal breaks.
             </p>
           </div>
@@ -41,8 +41,8 @@ export default function HomePage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1fr_1fr]">
   <MessageForm onSubmitted={handleMessageSubmitted} />
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-300 shadow-lg">
-          <h2 className="text-lg font-semibold text-aurora">📌 How It Works?</h2>
+        <div className="rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 text-sm text-text-light/80 shadow-glow-blue backdrop-blur-sm">
+          <h2 className="text-lg font-semibold text-cyber-blue">📌 How It Works?</h2>
           <ol className="mt-4 space-y-2 list-decimal pl-4">
             <li>Select the unlock date as a future time.</li>
             <li>Write your message and confirm the transaction.</li>
