@@ -81,48 +81,6 @@ export const supportedChains: Record<string, ChainDefinition> = {
     ],
     faucet: 'https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet'
   },
-  arbitrumSepolia: {
-    id: 421614,
-    name: 'Arbitrum Sepolia',
-    network: 'arbitrum-sepolia',
-    testnet: true,
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-      default: 'https://sepolia-rollup.arbitrum.io/rpc',
-      public: 'https://sepolia-rollup.arbitrum.io/rpc'
-    },
-    blockExplorer: 'https://sepolia.arbiscan.io',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: 'https://faucet.quicknode.com/arbitrum/sepolia'
-  },
-  optimismSepolia: {
-    id: 11155420,
-    name: 'Optimism Sepolia',
-    network: 'optimism-sepolia',
-    testnet: true,
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-      default: 'https://sepolia.optimism.io',
-      public: 'https://sepolia.optimism.io'
-    },
-    blockExplorer: 'https://sepolia-optimism.etherscan.io',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: 'https://app.optimism.io/faucet'
-  },
-  lineaSepolia: {
-    id: 59141,
-    name: 'Linea Sepolia',
-    network: 'linea-sepolia',
-    testnet: true,
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-      default: 'https://rpc.sepolia.linea.build',
-      public: 'https://rpc.sepolia.linea.build'
-    },
-    blockExplorer: 'https://sepolia.lineascan.build',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: 'https://faucet.linea.build/'
-  },
   scrollSepolia: {
     id: 534351,
     name: 'Scroll Sepolia',
@@ -146,20 +104,6 @@ export const supportedChains: Record<string, ChainDefinition> = {
     ],
     faucet: 'https://scroll.io/alpha/faucet'
   },
-  polygonAmoy: {
-    id: 80002,
-    name: 'Polygon Amoy',
-    network: 'polygon-amoy',
-    testnet: true,
-    nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
-    rpcUrls: {
-      default: 'https://rpc-amoy.polygon.technology',
-      public: 'https://rpc-amoy.polygon.technology'
-    },
-    blockExplorer: 'https://amoy.polygonscan.com',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: 'https://faucet.polygon.technology/'
-  },
   monadTestnet: {
     id: 10143,
     name: 'Monad Testnet',
@@ -182,76 +126,6 @@ export const supportedChains: Record<string, ChainDefinition> = {
       }
     ],
     faucet: 'https://faucet.monad.xyz/'
-  },
-  base: {
-    id: 8453,
-    name: 'Base',
-    network: 'base',
-    testnet: false,
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-      default: 'https://mainnet.base.org',
-      public: 'https://mainnet.base.org'
-    },
-    blockExplorer: 'https://basescan.org',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: undefined
-  },
-  arbitrum: {
-    id: 42161,
-    name: 'Arbitrum One',
-    network: 'arbitrum',
-    testnet: false,
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-      default: 'https://arb1.arbitrum.io/rpc',
-      public: 'https://arb1.arbitrum.io/rpc'
-    },
-    blockExplorer: 'https://arbiscan.io',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: undefined
-  },
-  optimism: {
-    id: 10,
-    name: 'Optimism',
-    network: 'optimism',
-    testnet: false,
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-      default: 'https://mainnet.optimism.io',
-      public: 'https://mainnet.optimism.io'
-    },
-    blockExplorer: 'https://optimistic.etherscan.io',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: undefined
-  },
-  polygon: {
-    id: 137,
-    name: 'Polygon',
-    network: 'polygon',
-    testnet: false,
-    nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
-    rpcUrls: {
-      default: 'https://polygon-rpc.com',
-      public: 'https://polygon-rpc.com'
-    },
-    blockExplorer: 'https://polygonscan.com',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: undefined
-  },
-  monad: {
-    id: 10000, // Monad mainnet chain ID (placeholder - güncel değeri kontrol edin)
-    name: 'Monad',
-    network: 'monad',
-    testnet: false,
-    nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
-    rpcUrls: {
-      default: 'https://rpc.monad.xyz',
-      public: 'https://rpc.monad.xyz'
-    },
-    blockExplorer: 'https://explorer.monad.xyz',
-    factoryAddress: ZERO_ADDRESS,
-    faucet: undefined
   }
 };
 
