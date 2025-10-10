@@ -21,7 +21,7 @@ interface MessageFormProps {
 }
 
 export function MessageForm({ onSubmitted }: MessageFormProps) {
-  const { isConnected } = useAccount();
+  const { isConnected, address: userAddress } = useAccount();
   const { chain } = useNetwork();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
@@ -98,10 +98,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       isConnected &&
       !!receiver &&
       isAddress(receiver) &&
+      receiver.toLowerCase() !== userAddress?.toLowerCase() && // ✅ Kendine mesaj gönderme kontrolü
       content.trim().length > 0 &&
       unlockTimestamp > Math.floor(Date.now() / 1000);
     setIsFormValid(valid);
-  }, [isConnected, receiver, content, unlockTimestamp]);
+  }, [isConnected, receiver, userAddress, content, unlockTimestamp]);
 
   // Prepare contract write with proper parameters
   const { config } = usePrepareContractWrite({
@@ -187,6 +188,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     }
     if (!receiver || !isAddress(receiver)) {
       setError("Geçerli bir alıcı adresi girin.");
+      return;
+    }
+    if (receiver.toLowerCase() === userAddress?.toLowerCase()) {
+      setError("❌ Kendine mesaj gönderemezsiniz! Lütfen farklı bir alıcı adresi girin.");
       return;
     }
     if (content.trim().length === 0) {
@@ -297,11 +302,21 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           value={receiver}
           onChange={(event: ChangeEvent<HTMLInputElement>) => setReceiver(event.target.value)}
           placeholder="0x..."
-          className="rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 font-mono text-sm text-slate-100 outline-none transition focus:border-aurora focus:ring-2 focus:ring-aurora/60"
+          className={`rounded-lg border px-4 py-3 font-mono text-sm text-slate-100 outline-none transition focus:ring-2 ${
+            receiver && receiver.toLowerCase() === userAddress?.toLowerCase()
+              ? 'border-red-500 bg-red-950/30 focus:border-red-500 focus:ring-red-500/60'
+              : 'border-slate-700 bg-slate-950/70 focus:border-aurora focus:ring-aurora/60'
+          }`}
         />
-        <p className="text-xs text-slate-400">
-          🔒 Only this address can read the message (not even the sender!)
-        </p>
+        {receiver && receiver.toLowerCase() === userAddress?.toLowerCase() ? (
+          <p className="text-xs text-red-400">
+            ⚠️ Bu sizin adresiniz! Kendine mesaj gönderemezsiniz.
+          </p>
+        ) : (
+          <p className="text-xs text-slate-400">
+            🔒 Only this address can read the message (not even the sender!)
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
