@@ -28,7 +28,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 md:items-end">
-            <ConnectButton showBalance={false} label="Connect Wallet" accountStatus="address" chainStatus="icon" />
+            <ConnectButton showBalance={false} label="Connect Wallet" accountStatus="address" chainStatus="none" />
             <div className="w-full md:w-80">
               <NetworkSwitcher />
             </div>
