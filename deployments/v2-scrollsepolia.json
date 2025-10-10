@@ -1,11 +1,11 @@
 {
   "network": "scrollSepolia",
   "chainId": 534351,
-  "contractAddress": "0x0000000000000000000000000000000000000000",
-  "deployer": "pending",
-  "timestamp": "pending",
+  "contractAddress": "0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5",
+  "deployer": "0xF6D39Dda8997407110264acEc6a24345834cB639",
+  "timestamp": "2025-10-10T15:02:00.000Z",
   "version": "V2",
   "contractName": "ChronoMessageV2",
   "blockNumber": null,
-  "note": "Waiting for deployment - insufficient funds. Use Scroll Sepolia faucet: https://scroll.io/alpha/faucet"
+  "gasUsed": "798845"
 }

@@ -134,7 +134,16 @@ export const supportedChains: Record<string, ChainDefinition> = {
       public: 'https://sepolia-rpc.scroll.io'
     },
     blockExplorer: 'https://sepolia.scrollscan.dev',
-    factoryAddress: ZERO_ADDRESS,
+    factoryAddress: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5', // ✅ Deployed!
+    versions: [
+      {
+        key: 'v2',
+        label: 'SealedMessage v2',
+        address: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5',
+        deployedAt: '2025-10-10',
+        isDefault: true
+      }
+    ],
     faucet: 'https://scroll.io/alpha/faucet'
   },
   polygonAmoy: {
