@@ -2,10 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tech-Noir / Fütüristik UI Teması */
 :root {
   color-scheme: dark;
+  
+  /* Ana Renk Paleti - Tech-Noir */
+  --color-background-dark: #0A0A1A;
+  --color-primary-blue: #00BFFF;
+  --color-primary-green: #39FF14;
+  --color-primary-purple: #BF00FF;
+  --color-primary-orange: #FF8C00;
+  --color-primary-yellow: #FFD700;
+  --color-text-light: #E0E0FF;
+  --color-text-dark: #333333;
+  --color-parchment-light: #F5DEB3;
+  --color-parchment-dark: #D2B48C;
+  
+  /* Gölge ve Parlama Ayarları */
+  --shadow-blue-light: 0 0 8px var(--color-primary-blue), 0 0 12px var(--color-primary-blue);
+  --shadow-blue-strong: 0 0 30px rgba(0, 191, 255, 0.8), inset 0 0 20px rgba(0, 191, 255, 0.4);
+  --shadow-green-light: 0 0 8px var(--color-primary-green), 0 0 12px var(--color-primary-green);
+  --shadow-purple-light: 0 0 8px var(--color-primary-purple), 0 0 12px var(--color-primary-purple);
+  --shadow-orange-light: 0 0 8px var(--color-primary-orange), 0 0 12px var(--color-primary-orange);
+  --shadow-yellow-light: 0 0 8px rgba(255, 215, 0, 0.6);
+  --shadow-generic-dark: 2px 2px 5px rgba(0, 0, 0, 0.3);
 }
 
 body {
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: var(--color-background-dark);
+  color: var(--color-text-light);
+  line-height: 1.6;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Link Stilleri */
+a {
+  color: var(--color-primary-blue);
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--color-primary-green);
+  text-shadow: var(--shadow-green-light);
+}
+
+/* Başlık Parlama Efekti */
+h1, h2, h3, h4, h5, h6 {
+  text-shadow: 0 0 5px rgba(0, 191, 255, 0.4);
+}
+
+/* Scrollbar Stili */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary-blue);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-green);
 }
