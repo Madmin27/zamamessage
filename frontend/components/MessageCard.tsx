@@ -42,18 +42,7 @@ export function MessageCard({
   const { address: userAddress } = useAccount();
   const contractAddress = useContractAddress();
 
-  // Debug: State değişimlerini logla
-  useEffect(() => {
-    console.log("🔄 MessageCard render - state:", { 
-      id: id.toString(), 
-      messageContent, 
-      isExpanded,
-      isLoadingContent,
-      isRead // Contract'tan gelen
-    });
-  }, [id, messageContent, isExpanded, isLoadingContent, isRead]);
-
-  // Eğer mesaj zaten okunmuşsa (ısRead: true), direkt içeriği yükle
+  // Eğer mesaj zaten okunmuşsa (isRead: true), direkt içeriği yükle
   useEffect(() => {
     const loadContentIfRead = async () => {
       if (!isRead || isSent || !unlocked || !client || !userAddress || !contractAddress) return;
@@ -61,7 +50,6 @@ export function MessageCard({
       
       setIsLoadingContent(true);
       try {
-        console.log("📚 Message already read, loading content...", id.toString());
         const content = await client.readContract({
           address: contractAddress,
           abi: chronoMessageV2Abi,
@@ -70,7 +58,6 @@ export function MessageCard({
           account: userAddress as `0x${string}`
         }) as string;
         
-        console.log("✅ Content loaded (isRead):", content);
         setMessageContent(content);
         setIsExpanded(true);
       } catch (err) {
@@ -106,12 +93,6 @@ export function MessageCard({
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       try {
-        console.log("🔍 getMessageContent çağrılıyor...", {
-          messageId: id.toString(),
-          userAddress,
-          contractAddress
-        });
-        
         // getMessageContent ile içeriği al (VIEW - gas yok)
         const content = await client.readContract({
           address: contractAddress,
@@ -121,18 +102,11 @@ export function MessageCard({
           account: userAddress as `0x${string}`
         }) as string;
 
-        console.log("✅ Content fetched:", content);
         setMessageContent(content);
         setIsExpanded(true);
-        console.log("📝 State güncellendi:", { content, isExpanded: true });
         onMessageRead?.();
       } catch (err: any) {
         console.error("❌ Content could not be fetched:", err);
-        console.error("Hata detayı:", {
-          message: err.message,
-          cause: err.cause,
-          shortMessage: err.shortMessage
-        });
         setMessageContent("⚠️ Content could not be loaded. Please refresh the page.");
       } finally {
         setIsLoadingContent(false);
@@ -149,7 +123,6 @@ export function MessageCard({
       console.error("❌ Contract address not available");
       return;
     }
-    console.log("🔵 Calling readMessage for message #", id.toString());
     readMessage?.();
   };
 

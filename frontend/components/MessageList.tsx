@@ -304,7 +304,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
         <div className="grid gap-4 md:grid-cols-2">
           {items.map((item, index) => (
             <MessageCard
-              key={`${item.isSent ? 'sent' : 'received'}-${item.id.toString()}-${index}`}
+              key={`msg-${item.id.toString()}-${item.unlockTime.toString()}-${item.isSent ? 's' : 'r'}-${index}`}
               id={item.id}
               sender={item.sender}
               receiver={item.receiver}
