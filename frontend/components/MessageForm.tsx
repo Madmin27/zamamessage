@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { useAccount, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
+import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
@@ -39,6 +39,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [userTimezone, setUserTimezone] = useState<string>("UTC");
   const [selectedTimezone, setSelectedTimezone] = useState<string>("Europe/Istanbul");
   const [isPresetsOpen, setIsPresetsOpen] = useState(false); // Quick Select açık/kapalı durumu
+  
+  // Form validation state
+  const [isFormValid, setIsFormValid] = useState(false);
 
   // Prevent hydration mismatch & Set default time on client side
   useEffect(() => {
@@ -59,17 +62,14 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     setUnlock(formatted);
     // Kullanıcının timezone'unu al
     setUserTimezone(dayjs.tz.guess());
+    
+    console.log("🔧 MessageForm Mounted:", {
+      contractAddress,
+      hasContract,
+      chainId: chain?.id,
+      activeVersion
+    });
   }, []);
-
-  const { data, isLoading: isPending, write } = useContractWrite({
-    address: contractAddress,
-    abi: chronoMessageV2Abi,
-    functionName: "sendMessage"
-  });
-  
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
-    hash: data?.hash 
-  });
 
   // Unlock timestamp hesaplama (preset veya custom)
   const unlockTimestamp = useMemo(() => {
@@ -91,6 +91,46 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return Math.floor(Date.now() / 1000);
     }
   }, [unlockMode, presetDuration, unlock, selectedTimezone]);
+
+  // Form validation
+  useEffect(() => {
+    const valid = 
+      isConnected &&
+      !!receiver &&
+      isAddress(receiver) &&
+      content.trim().length > 0 &&
+      unlockTimestamp > Math.floor(Date.now() / 1000);
+    setIsFormValid(valid);
+  }, [isConnected, receiver, content, unlockTimestamp]);
+
+  // Prepare contract write with proper parameters
+  const { config } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV2Abi,
+    functionName: "sendMessage",
+    args: receiver && content && isFormValid 
+      ? [receiver as `0x${string}`, content, BigInt(unlockTimestamp)]
+      : undefined,
+    enabled: isFormValid && !!contractAddress
+  });
+
+  const { data, isLoading: isPending, write } = useContractWrite(config);
+  
+  // Debug: useContractWrite sonucunu logla
+  useEffect(() => {
+    console.log("🔍 useContractWrite state:", {
+      contractAddress,
+      hasConfig: !!config,
+      hasWrite: !!write,
+      isPending,
+      dataHash: data?.hash,
+      isFormValid
+    });
+  }, [contractAddress, config, write, isPending, data, isFormValid]);
+  
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
+    hash: data?.hash 
+  });
 
   // UTC ve local time gösterimi
   const unlockTimeDisplay = useMemo(() => {
@@ -127,6 +167,20 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    
+    console.log("🔍 MessageForm Submit Debug:", {
+      isConnected,
+      contractAddress,
+      hasContract,
+      chainId: chain?.id,
+      chainName: chain?.name,
+      receiver,
+      contentLength: content.length,
+      unlockTimestamp,
+      writeAvailable: !!write,
+      isFormValid
+    });
+    
     if (!isConnected) {
       setError("Önce cüzdanınızı bağlayın.");
       return;
@@ -150,10 +204,21 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return;
     }
 
+    if (!write) {
+      console.error("❌ write function is not available!");
+      setError("Contract write function not available. Please check your network connection and try again.");
+      return;
+    }
+
     setError(null);
-    write?.({
-      args: [receiver as `0x${string}`, content, BigInt(unlockTimestamp)]
-    });
+    console.log("📝 Calling write() - arguments already prepared in usePrepareContractWrite");
+    
+    try {
+      write(); // No arguments needed - they're in the config from usePrepareContractWrite
+    } catch (err) {
+      console.error("❌ Error calling write():", err);
+      setError(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   // Prevent hydration mismatch
