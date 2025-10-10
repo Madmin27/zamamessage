@@ -38,6 +38,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [successToast, setSuccessToast] = useState(false);
   const [userTimezone, setUserTimezone] = useState<string>("UTC");
   const [selectedTimezone, setSelectedTimezone] = useState<string>("Europe/Istanbul");
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false); // Quick Select açık/kapalı durumu
 
   // Prevent hydration mismatch & Set default time on client side
   useEffect(() => {
@@ -261,18 +262,24 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setUnlockMode("preset")}
+            onClick={() => {
+              setUnlockMode("preset");
+              setIsPresetsOpen(!isPresetsOpen); // Toggle açık/kapalı
+            }}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "preset"
-                ? "bg-aurora/20 border-2 border-aurora text-aurora"
-                : "bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-slate-200"
+                ? "bg-sunset/20 border-2 border-sunset text-sunset"
+                : "bg-slate-800/50 border border-slate-700 text-slate-300 hover:border-slate-600"
             }`}
           >
-            ⚡ Quick Select
+            ⚡ Quick Select {unlockMode === "preset" && (isPresetsOpen ? "▼" : "▶")}
           </button>
           <button
             type="button"
-            onClick={() => setUnlockMode("custom")}
+            onClick={() => {
+              setUnlockMode("custom");
+              setIsPresetsOpen(false); // Custom'a geçince preset'leri kapat
+            }}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "custom"
                 ? "bg-aurora/20 border-2 border-aurora text-aurora"
@@ -284,8 +291,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         </div>
 
         {/* Preset Durations */}
-        {unlockMode === "preset" && (
-          <div className="grid grid-cols-3 gap-2">
+        {unlockMode === "preset" && isPresetsOpen && (
+          <div className="grid grid-cols-3 gap-2 animate-in slide-in-from-top duration-200">
             {[
               { label: "⚡ Now (10s)", value: 10 },
               { label: "30 seconds", value: 30 },
