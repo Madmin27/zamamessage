@@ -105,14 +105,21 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   }, [isConnected, receiver, userAddress, content, unlockTimestamp]);
 
   // Prepare contract write with proper parameters
+  const shouldPrepare = isFormValid && 
+    !!contractAddress && 
+    !!receiver && 
+    isAddress(receiver) &&
+    !!content &&
+    unlockTimestamp > 0;
+
   const { config } = usePrepareContractWrite({
     address: contractAddress,
     abi: chronoMessageV2Abi,
     functionName: "sendMessage",
-    args: receiver && content && isFormValid 
+    args: shouldPrepare
       ? [receiver as `0x${string}`, content, BigInt(unlockTimestamp)]
       : undefined,
-    enabled: isFormValid && !!contractAddress
+    enabled: shouldPrepare
   });
 
   const { data, isLoading: isPending, write } = useContractWrite(config);
@@ -121,13 +128,17 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   useEffect(() => {
     console.log("🔍 useContractWrite state:", {
       contractAddress,
+      shouldPrepare,
       hasConfig: !!config,
       hasWrite: !!write,
       isPending,
       dataHash: data?.hash,
-      isFormValid
+      isFormValid,
+      receiver,
+      contentLength: content?.length || 0,
+      unlockTimestamp
     });
-  }, [contractAddress, config, write, isPending, data, isFormValid]);
+  }, [contractAddress, shouldPrepare, config, write, isPending, data, isFormValid, receiver, content, unlockTimestamp]);
   
   const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
     hash: data?.hash 
