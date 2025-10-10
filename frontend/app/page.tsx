@@ -5,6 +5,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { MessageForm } from "../components/MessageForm";
 import { MessageList } from "../components/MessageList";
 import { NetworkSwitcher } from "../components/NetworkSwitcher";
+import { VersionSwitcher } from "../components/VersionSwitcher";
 import { appConfig } from "../lib/env";
 
 export default function HomePage() {
@@ -30,6 +31,9 @@ export default function HomePage() {
             <ConnectButton showBalance={false} label="Connect Wallet" accountStatus="address" chainStatus="icon" />
             <div className="w-full md:w-80">
               <NetworkSwitcher />
+            </div>
+            <div className="w-full md:w-80">
+              <VersionSwitcher />
             </div>
           </div>
         </div>

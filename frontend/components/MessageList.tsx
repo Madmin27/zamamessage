@@ -11,6 +11,7 @@ import { chronoMessageV2Abi } from "../lib/abi-v2";
 import { appConfig } from "../lib/env";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 import { MessageCard } from "./MessageCard";
+import { useVersioning } from "./VersionProvider";
 
 dayjs.extend(relativeTime);
 dayjs.extend(advancedFormat);
@@ -94,6 +95,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
   const { chain } = useNetwork();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
+  const { getSelectedVersion } = useVersioning();
   const [items, setItems] = useState<MessageViewModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +239,8 @@ export function MessageList({ refreshKey }: MessageListProps) {
     );
   }
 
+  const activeVersion = getSelectedVersion(chain?.id);
+
   return (
     <section className="space-y-4">
       {/* Toast Notifications */}
@@ -257,8 +261,17 @@ export function MessageList({ refreshKey }: MessageListProps) {
         ))}
       </div>
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-aurora">Messages</h2>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col">
+          <h2 className="text-lg font-semibold text-aurora">Messages</h2>
+          {activeVersion && (
+            <p className="text-xs text-slate-400">
+              Viewing data from <span className="text-sky-300 font-semibold">{activeVersion.label}</span>
+              {" "}
+              (<span className="font-mono text-slate-500">{`${activeVersion.address.slice(0, 6)}…${activeVersion.address.slice(-4)}`}</span>)
+            </p>
+          )}
+        </div>
         <button
           onClick={loadMessages}
           disabled={loading}

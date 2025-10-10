@@ -8,6 +8,7 @@ import { injectedWallet, metaMaskWallet } from "@rainbow-me/rainbowkit/wallets";
 import "@rainbow-me/rainbowkit/styles.css";
 import { defineChain } from "viem";
 import { supportedChains } from "../lib/chains";
+import { VersionProvider } from "./VersionProvider";
 
 export function Providers({ children }: PropsWithChildren) {
   // Convert supportedChains to wagmi chain format
@@ -67,7 +68,9 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <WagmiConfig config={config}>
       <RainbowKitProvider chains={chains} theme={midnightTheme()}>
-        {children}
+        <VersionProvider>
+          {children}
+        </VersionProvider>
       </RainbowKitProvider>
     </WagmiConfig>
   );

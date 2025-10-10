@@ -10,6 +10,7 @@ import { chronoMessageV2Abi } from "../lib/abi-v2";
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
+import { useVersioning } from "./VersionProvider";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -24,6 +25,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const { chain } = useNetwork();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
+  const { getSelectedVersion } = useVersioning();
+  const activeVersion = getSelectedVersion(chain?.id);
+
   const [receiver, setReceiver] = useState("");
   const [content, setContent] = useState("");
   const [unlockMode, setUnlockMode] = useState<"preset" | "custom">("preset");
@@ -208,6 +212,15 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         onSubmit={handleSubmit}
         className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-lg backdrop-blur"
       >
+      {activeVersion && (
+        <div className="rounded-lg border border-sky-700/40 bg-sky-900/10 px-4 py-2 text-xs text-sky-200">
+          <p>
+            Active contract: <span className="font-semibold">{activeVersion.label}</span>
+            {" "}
+            (<span className="font-mono">{`${activeVersion.address.slice(0, 6)}…${activeVersion.address.slice(-4)}`}</span>)
+          </p>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <label htmlFor="receiver" className="text-sm font-semibold uppercase tracking-wide text-aurora">
           Receiver Address
