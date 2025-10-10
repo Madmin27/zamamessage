@@ -101,6 +101,15 @@ if (process.env.MONAD_TESTNET_RPC_URL && privateKey) {
   };
 }
 
+// Scroll Sepolia Testnet
+if (process.env.SCROLL_SEPOLIA_RPC_URL && privateKey) {
+  networks.scrollSepolia = {
+    url: process.env.SCROLL_SEPOLIA_RPC_URL,
+    accounts: [privateKey],
+    chainId: 534351
+  };
+}
+
 // Polygon Mainnet
 if (process.env.POLYGON_RPC_URL && privateKey) {
   networks.polygon = {
@@ -143,7 +152,8 @@ const config: HardhatUserConfig = {
       baseSepolia: process.env.BASESCAN_API_KEY ?? "",
       lineaSepolia: process.env.LINEASCAN_API_KEY ?? "",
       arbitrumSepolia: process.env.ARBISCAN_API_KEY ?? "",
-      optimismSepolia: process.env.OPTIMISTIC_ETHERSCAN_API_KEY ?? ""
+      optimismSepolia: process.env.OPTIMISTIC_ETHERSCAN_API_KEY ?? "",
+      scrollSepolia: process.env.SCROLLSCAN_API_KEY ?? ""
     }
   }
 };

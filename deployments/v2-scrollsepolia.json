@@ -1,0 +1,11 @@
+{
+  "network": "scrollSepolia",
+  "chainId": 534351,
+  "contractAddress": "0x0000000000000000000000000000000000000000",
+  "deployer": "pending",
+  "timestamp": "pending",
+  "version": "V2",
+  "contractName": "ChronoMessageV2",
+  "blockNumber": null,
+  "note": "Waiting for deployment - insufficient funds. Use Scroll Sepolia faucet: https://scroll.io/alpha/faucet"
+}
