@@ -201,8 +201,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Prevent hydration mismatch
   if (!mounted) {
     return (
-      <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-lg backdrop-blur">
-        <p className="text-sm text-slate-400">Loading...</p>
+      <div className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm">
+        <p className="text-sm text-text-light/60">Loading...</p>
       </div>
     );
   }
@@ -210,8 +210,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Connect your wallet
   if (!isConnected) {
     return (
-      <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-lg backdrop-blur">
-        <p className="text-sm text-slate-400">Connect your wallet...</p>
+      <div className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm">
+        <p className="text-sm text-text-light/60">Connect your wallet...</p>
       </div>
     );
   }
@@ -253,10 +253,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-lg backdrop-blur"
+        className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm"
       >
       {activeVersion && (
-        <div className="rounded-lg border border-sky-700/40 bg-sky-900/10 px-4 py-2 text-xs text-sky-200">
+        <div className="rounded-lg border border-cyber-blue/40 bg-cyber-blue/10 px-4 py-2 text-xs text-cyber-blue">
           <p>
             Active contract: <span className="font-semibold">{activeVersion.label}</span>
             {" "}
@@ -265,7 +265,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         </div>
       )}
       <div className="flex flex-col gap-2">
-        <label htmlFor="receiver" className="text-sm font-semibold uppercase tracking-wide text-aurora">
+        <label htmlFor="receiver" className="text-sm font-semibold uppercase tracking-wide text-cyber-blue">
           Receiver Address
         </label>
         <input
@@ -274,10 +274,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           value={receiver}
           onChange={(event: ChangeEvent<HTMLInputElement>) => setReceiver(event.target.value)}
           placeholder="0x..."
-          className={`rounded-lg border px-4 py-3 font-mono text-sm text-slate-100 outline-none transition focus:ring-2 ${
+          className={`rounded-lg border px-4 py-3 font-mono text-sm text-text-light outline-none transition focus:ring-2 ${
             receiver && receiver.toLowerCase() === userAddress?.toLowerCase()
               ? 'border-red-500 bg-red-950/30 focus:border-red-500 focus:ring-red-500/60'
-              : 'border-slate-700 bg-slate-950/70 focus:border-aurora focus:ring-aurora/60'
+              : 'border-cyber-blue/40 bg-midnight/60 focus:border-cyber-blue focus:ring-cyber-blue/60'
           }`}
         />
         {receiver && receiver.toLowerCase() === userAddress?.toLowerCase() ? (
@@ -285,14 +285,14 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             ⚠️ Bu sizin adresiniz! Kendine mesaj gönderemezsiniz.
           </p>
         ) : (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-text-light/60">
             🔒 Only this address can read the message (not even the sender!)
           </p>
         )}
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="content" className="text-sm font-semibold uppercase tracking-wide text-aurora">
+        <label htmlFor="content" className="text-sm font-semibold uppercase tracking-wide text-cyber-blue">
           Message
         </label>
         <textarea
@@ -300,13 +300,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           value={content}
           onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setContent(event.target.value)}
           placeholder="Write and Seal"
-          className="min-h-[120px] rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-slate-100 outline-none transition focus:border-aurora focus:ring-2 focus:ring-aurora/60"
+          className="min-h-[120px] rounded-lg border border-cyber-blue/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyber-blue focus:ring-2 focus:ring-cyber-blue/60"
         />
       </div>
       
       {/* Unlock Time Selection */}
       <div className="flex flex-col gap-3">
-        <label className="text-sm font-semibold uppercase tracking-wide text-aurora">
+        <label className="text-sm font-semibold uppercase tracking-wide text-cyber-blue">
           ⏰ Unlock Time
         </label>
         
@@ -320,8 +320,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             }}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "preset"
-                ? "bg-sunset/20 border-2 border-sunset text-sunset"
-                : "bg-slate-800/50 border border-slate-700 text-slate-300 hover:border-slate-600"
+                ? "bg-neon-orange/20 border-2 border-neon-orange text-neon-orange shadow-glow-orange"
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light hover:border-cyber-blue/60"
             }`}
           >
             ⚡ Quick Select {unlockMode === "preset" && (isPresetsOpen ? "▼" : "▶")}
@@ -335,7 +335,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "custom"
                 ? "bg-aurora/20 border-2 border-aurora text-aurora"
-                : "bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-slate-200"
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
             }`}
           >
             📅 Custom Date
@@ -365,8 +365,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                 onClick={() => setPresetDuration(value)}
                 className={`rounded-lg px-3 py-2 text-sm transition ${
                   presetDuration === value
-                    ? "bg-sunset/20 border-2 border-sunset text-sunset"
-                    : "bg-slate-800/50 border border-slate-700 text-slate-300 hover:border-slate-600"
+                    ? "bg-neon-orange/20 border-2 border-neon-orange text-neon-orange shadow-glow-orange"
+                    : "bg-midnight/40 border border-cyber-blue/30 text-text-light hover:border-cyber-blue/60"
                 }`}
               >
                 {label}
@@ -383,19 +383,19 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               type="datetime-local"
               value={unlock}
               onChange={(event: ChangeEvent<HTMLInputElement>) => setUnlock(event.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-3 text-slate-100 outline-none transition focus:border-sunset focus:ring-2 focus:ring-sunset/60"
+              className="w-full rounded-lg border border-cyber-blue/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-neon-orange focus:ring-2 focus:ring-neon-orange/60"
             />
             
             {/* Timezone Seçici */}
             <div className="flex flex-col gap-2">
-              <label htmlFor="timezone" className="text-xs font-medium text-slate-400">
+              <label htmlFor="timezone" className="text-xs font-medium text-text-light/60">
                 🌐 Saat Dilimi (Timezone)
               </label>
               <select
                 id="timezone"
                 value={selectedTimezone}
                 onChange={(e) => setSelectedTimezone(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-2 text-sm text-slate-100 outline-none transition focus:border-sunset focus:ring-2 focus:ring-sunset/60"
+                className="rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-2 text-sm text-slate-100 outline-none transition focus:border-neon-orange focus:ring-2 focus:ring-neon-orange/60"
               >
                 <optgroup label="🇹🇷 Türkiye">
                   <option value="Europe/Istanbul">İstanbul (UTC+3)</option>
@@ -424,7 +424,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                   <option value="Australia/Sydney">Sydney (UTC+10)</option>
                 </optgroup>
               </select>
-              <p className="text-xs text-slate-500 italic">
+              <p className="text-xs text-text-light/50 italic">
                 💡 The date/time you enter will be interpreted in this timezone
               </p>
             </div>
@@ -433,27 +433,27 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
         {/* Time Display */}
         {mounted && (
-          <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-3 space-y-2 text-xs">
+          <div className="rounded-lg bg-midnight/40 border border-cyber-blue/30 p-3 space-y-2 text-xs">
             {unlockMode === "custom" && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">🕒 Selected Timezone:</span>
+                <span className="text-text-light/60">🕒 Selected Timezone:</span>
                 <span className="text-sunset font-mono font-semibold">{unlockTimeDisplay.selected}</span>
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">🌍 Your Time:</span>
+              <span className="text-text-light/60">🌍 Your Time:</span>
               <span className="text-slate-200 font-mono">{unlockTimeDisplay.local}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">🌐 Universal Time (UTC):</span>
+              <span className="text-text-light/60">🌐 Universal Time (UTC):</span>
               <span className="text-slate-200 font-mono">{unlockTimeDisplay.utc}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">⏱️ Time Remaining:</span>
+              <span className="text-text-light/60">⏱️ Time Remaining:</span>
               <span className="text-green-400 font-semibold">{unlockTimeDisplay.relative}</span>
             </div>
             <div className="pt-2 border-t border-slate-700">
-              <p className="text-slate-500 italic">
+              <p className="text-text-light/50 italic">
                 ℹ️ Blockchain uses UTC time. The message will unlock at this UTC time regardless of the recipient's location.
               </p>
             </div>
@@ -469,7 +469,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         {isPending || isConfirming ? "Sending transaction..." : "Send Message"}
       </button>
       {data?.hash ? (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-text-light/60">
           İşlem hash&apos;i: {data.hash.slice(0, 10)}...{data.hash.slice(-6)}
         </p>
       ) : null}
