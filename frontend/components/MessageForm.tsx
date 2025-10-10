@@ -62,13 +62,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     setUnlock(formatted);
     // Kullanıcının timezone'unu al
     setUserTimezone(dayjs.tz.guess());
-    
-    console.log("🔧 MessageForm Mounted:", {
-      contractAddress,
-      hasContract,
-      chainId: chain?.id,
-      activeVersion
-    });
   }, []);
 
   // Unlock timestamp hesaplama (preset veya custom)
@@ -124,22 +117,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   const { data, isLoading: isPending, write } = useContractWrite(config);
   
-  // Debug: useContractWrite sonucunu logla
-  useEffect(() => {
-    console.log("🔍 useContractWrite state:", {
-      contractAddress,
-      shouldPrepare,
-      hasConfig: !!config,
-      hasWrite: !!write,
-      isPending,
-      dataHash: data?.hash,
-      isFormValid,
-      receiver,
-      contentLength: content?.length || 0,
-      unlockTimestamp
-    });
-  }, [contractAddress, shouldPrepare, config, write, isPending, data, isFormValid, receiver, content, unlockTimestamp]);
-  
   const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
     hash: data?.hash 
   });
@@ -180,19 +157,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     
-    console.log("🔍 MessageForm Submit Debug:", {
-      isConnected,
-      contractAddress,
-      hasContract,
-      chainId: chain?.id,
-      chainName: chain?.name,
-      receiver,
-      contentLength: content.length,
-      unlockTimestamp,
-      writeAvailable: !!write,
-      isFormValid
-    });
-    
     if (!isConnected) {
       setError("Önce cüzdanınızı bağlayın.");
       return;
@@ -221,18 +185,15 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     }
 
     if (!write) {
-      console.error("❌ write function is not available!");
       setError("Contract write function not available. Please check your network connection and try again.");
       return;
     }
 
     setError(null);
-    console.log("📝 Calling write() - arguments already prepared in usePrepareContractWrite");
     
     try {
       write(); // No arguments needed - they're in the config from usePrepareContractWrite
     } catch (err) {
-      console.error("❌ Error calling write():", err);
       setError(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
