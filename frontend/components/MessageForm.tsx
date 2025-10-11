@@ -30,9 +30,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   const [receiver, setReceiver] = useState("");
   const [content, setContent] = useState("");
+  const [conditionType, setConditionType] = useState<"unlock-time" | "for-fee">("unlock-time"); // Yeni: koşul tipi
   const [unlockMode, setUnlockMode] = useState<"preset" | "custom">("preset");
   const [presetDuration, setPresetDuration] = useState<number>(10); // 10 saniye (anlık mesajlaşma için)
   const [unlock, setUnlock] = useState<string>("");
+  const [feeAmount, setFeeAmount] = useState<string>("0.001"); // Yeni: ücret miktarı
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
@@ -304,11 +306,48 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         />
       </div>
       
-      {/* Unlock Time Selection */}
-      <div className="flex flex-col gap-3">
-        <label className="text-sm font-semibold uppercase tracking-wide text-cyber-blue">
-          ⏰ Unlock Time
+      {/* Condition Type Selection - Tab Buttons */}
+      <div className="flex flex-col">
+        <label className="text-sm font-semibold uppercase tracking-wide text-text-light/80 mb-3">
+          Unlock Condition
         </label>
+        
+        {/* Condition Type Tabs */}
+        <div className="flex gap-0">
+          <button
+            type="button"
+            onClick={() => setConditionType("unlock-time")}
+            className={`flex-1 rounded-t-lg px-4 py-3 text-sm font-semibold transition border-t-2 border-l-2 border-r border-b-0 ${
+              conditionType === "unlock-time"
+                ? "bg-neon-green/20 border-neon-green text-neon-green shadow-glow-green"
+                : "bg-midnight/40 border-cyber-blue/30 text-text-light/60 hover:text-text-light hover:border-cyber-blue/60"
+            }`}
+          >
+            ⏰ Unlock Time
+          </button>
+          <button
+            type="button"
+            onClick={() => setConditionType("for-fee")}
+            className={`flex-1 rounded-t-lg px-4 py-3 text-sm font-semibold transition border-t-2 border-r-2 border-l border-b-0 ${
+              conditionType === "for-fee"
+                ? "bg-cyan-500/20 border-cyan-400 text-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]"
+                : "bg-midnight/40 border-cyber-blue/30 text-text-light/60 hover:text-text-light hover:border-cyber-blue/60"
+            }`}
+          >
+            💰 For a Fee
+          </button>
+        </div>
+
+        {/* Content Area - Matches Active Tab Color */}
+        <div className={`rounded-b-lg rounded-tr-lg border-2 border-t-0 p-4 transition ${
+          conditionType === "unlock-time"
+            ? "border-neon-green bg-neon-green/10"
+            : "border-cyan-400 bg-cyan-500/10"
+        }`}>
+        
+        {/* Unlock Time Content */}
+        {conditionType === "unlock-time" && (
+          <div className="flex flex-col gap-3">
         
         {/* Mode Selection */}
         <div className="flex gap-2">
@@ -460,6 +499,44 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           </div>
         )}
       </div>
+        )}
+        
+        {/* For a Fee Content */}
+        {conditionType === "for-fee" && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-text-light/80">
+              💰 Alıcı, mesajı açmak için belirtilen ücreti ödeyecek.
+            </p>
+            
+            <div className="flex flex-col gap-2">
+              <label htmlFor="feeAmount" className="text-sm font-semibold text-cyan-400">
+                Fee Amount (ETH/ANKR)
+              </label>
+              <input
+                id="feeAmount"
+                type="number"
+                step="0.001"
+                min="0"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                placeholder="0.001"
+                className="rounded-lg border border-cyan-400/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60"
+              />
+              <p className="text-xs text-text-light/60">
+                💡 Alıcı bu ücreti ödeyerek mesajı anında açabilir
+              </p>
+            </div>
+            
+            <div className="rounded-lg bg-cyan-500/10 border border-cyan-400/30 p-3 text-xs text-cyan-300">
+              <p>⚡ <strong>Instant Unlock:</strong> Ücret ödendiğinde mesaj hemen açılır</p>
+              <p className="mt-1">🔒 <strong>Secure:</strong> Ücret akıllı kontrat tarafından yönetilir</p>
+            </div>
+          </div>
+        )}
+        
+        </div>
+      </div>
+      
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       <button
         type="submit"

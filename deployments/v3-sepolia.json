@@ -1,0 +1,17 @@
+{
+  "version": "v3",
+  "address": "0x86D0b9c5579578E2029A504DD40254f76eFaa827",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0xF6D39Dda8997407110264acEc6a24345834cB639",
+  "deployedAt": "2025-10-11T18:03:13.895Z",
+  "blockNumber": 9390739,
+  "gasUsed": "1834564",
+  "features": [
+    "TIME_LOCK",
+    "PAYMENT",
+    "HYBRID",
+    "IPFS_SUPPORT",
+    "MULTIPLE_CONTENT_TYPES"
+  ]
+}

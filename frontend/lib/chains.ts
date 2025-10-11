@@ -39,14 +39,30 @@ export const supportedChains: Record<string, ChainDefinition> = {
       infura: 'https://sepolia.infura.io/v3/e6aecc89c96940a5a671b2ad96afe68a'
     },
     blockExplorer: 'https://sepolia.etherscan.io',
-    factoryAddress: '0xA52bD90D699D00781F6610631E22703526c69aF5', // ✅ V2.2 deployed!
+    factoryAddress: '0x86D0b9c5579578E2029A504DD40254f76eFaa827', // ✅ V3 (Security Fix)
     versions: [
       {
+        key: 'v3_secure',
+        label: 'ChronoMessage v3.1 (Security Fix)',
+        address: '0x86D0b9c5579578E2029A504DD40254f76eFaa827',
+        description: 'Multi-condition + Payment timestamp validation',
+        deployedAt: '2025-10-11',
+        isDefault: true
+      },
+      {
+        key: 'v3',
+        label: 'ChronoMessage v3 (Deprecated)',
+        address: '0x665a26E1B4eeDB6D33a4B50d25eD0c2FEfA1102f',
+        description: '⚠️ Security issue - do not use',
+        deployedAt: '2025-10-11',
+        isDefault: false
+      },
+      {
         key: 'v2_2',
-        label: 'SealedMessage v2.2 (Latest)',
+        label: 'SealedMessage v2.2',
         address: '0xA52bD90D699D00781F6610631E22703526c69aF5',
         deployedAt: '2025-10-06',
-        isDefault: true
+        isDefault: false
       },
       {
         key: 'v2_1',
@@ -69,14 +85,30 @@ export const supportedChains: Record<string, ChainDefinition> = {
       public: 'https://sepolia.base.org'
     },
     blockExplorer: 'https://sepolia.basescan.org',
-    factoryAddress: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5', // ✅ Deployed!
+    factoryAddress: '0x9C01F6fC426028d327a668E52d311042Cf3b38F3', // ✅ V3.1 (Security Fix)
     versions: [
+      {
+        key: 'v3_secure',
+        label: 'ChronoMessage v3.1 (Security Fix)',
+        address: '0x9C01F6fC426028d327a668E52d311042Cf3b38F3',
+        description: 'Multi-condition + Payment timestamp validation',
+        deployedAt: '2025-10-11',
+        isDefault: true
+      },
+      {
+        key: 'v3',
+        label: 'ChronoMessage v3 (Deprecated)',
+        address: '0xf95C75Ae510e05B1cf6B0d810BAc38be8Bb57Faa',
+        description: '⚠️ Do not use',
+        deployedAt: '2025-10-11',
+        isDefault: false
+      },
       {
         key: 'v2',
         label: 'SealedMessage v2',
         address: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5',
         deployedAt: '2025-10-07',
-        isDefault: true
+        isDefault: false
       }
     ],
     faucet: 'https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet'
@@ -92,14 +124,30 @@ export const supportedChains: Record<string, ChainDefinition> = {
       public: 'https://sepolia-rpc.scroll.io'
     },
     blockExplorer: 'https://sepolia.scrollscan.dev',
-    factoryAddress: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5', // ✅ Deployed!
+    factoryAddress: '0x55A6659286ef8D82c97E5cf243731e6f960a8EbD', // ✅ V3.1 (Security Fix)
     versions: [
+      {
+        key: 'v3_secure',
+        label: 'ChronoMessage v3.1 (Security Fix)',
+        address: '0x55A6659286ef8D82c97E5cf243731e6f960a8EbD',
+        description: 'Multi-condition + Payment timestamp validation',
+        deployedAt: '2025-10-11',
+        isDefault: true
+      },
+      {
+        key: 'v3',
+        label: 'ChronoMessage v3 (Deprecated)',
+        address: '0xcDF777FbB6aBa2c4C54Ff2a91B2b2Ef7708597e4',
+        description: '⚠️ Do not use',
+        deployedAt: '2025-10-11',
+        isDefault: false
+      },
       {
         key: 'v2',
         label: 'SealedMessage v2',
         address: '0xa1495F1a4c93e1acD5d178270404C8e8b225C4B5',
         deployedAt: '2025-10-10',
-        isDefault: true
+        isDefault: false
       }
     ],
     faucet: 'https://scroll.io/alpha/faucet'

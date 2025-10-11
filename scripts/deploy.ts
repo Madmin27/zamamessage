@@ -9,11 +9,11 @@ async function main() {
   console.log("\n=== ChronoMessage Deployment ===");
   console.log(`Network: ${hre.network.name}`);
   console.log(`Deployer: ${deployer.address}`);
-  console.log(`Balance: ${hre.ethers.formatEther(balance)} ETH\n`);
+  console.log(`Balance: ${hre.ethers.formatEther(balance)} ANKR\n`);
 
-  // Bakiye kontrolü
+  // Bakiye kontrolü (Neura Testnet için devre dışı - gas-free olabilir)
   const minBalance = hre.ethers.parseEther("0.01");
-  if (balance < minBalance) {
+  if (balance < minBalance && hre.network.name !== 'neuraTestnet') {
     console.error("❌ Insufficient balance! Need at least 0.01 ETH for deployment.");
     process.exit(1);
   }

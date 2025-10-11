@@ -23,7 +23,7 @@ const config: Config = {
       boxShadow: {
         'glow-blue': '0 0 8px #00BFFF, 0 0 12px #00BFFF',
         'glow-blue-strong': '0 0 30px rgba(0, 191, 255, 0.8), inset 0 0 20px rgba(0, 191, 255, 0.4)',
-        'glow-green': '0 0 8px #39FF14, 0 0 12px #39FF14',
+        'glow-green': 'none',
         'glow-purple': '0 0 8px #BF00FF, 0 0 12px #BF00FF',
         'glow-orange': '0 0 8px #FF8C00, 0 0 12px #FF8C00',
         'glow-yellow': '0 0 8px rgba(255, 215, 0, 0.6)',

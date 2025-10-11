@@ -129,16 +129,38 @@ if (rpcUrl && privateKey) {
   };
 }
 
+// Neura Testnet
+if (process.env.NEURA_TESTNET_RPC_URL && privateKey) {
+  networks.neuraTestnet = {
+    url: process.env.NEURA_TESTNET_RPC_URL,
+    accounts: [privateKey],
+    chainId: 267
+  };
+}
+
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.24",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200
+    compilers: [
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          },
+          viaIR: true  // Stack too deep çözümü için
+        }
       },
-      evmVersion: "cancun"
-    }
+      {
+        version: "0.8.24",  // Zama FHE contracts için
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          }
+        }
+      }
+    ]
   },
   defaultNetwork: "hardhat",
   networks,
