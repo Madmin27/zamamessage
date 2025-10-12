@@ -34,6 +34,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const hasContract = useHasContract();
   const { getSelectedVersion } = useVersioning();
   const activeVersion = getSelectedVersion(chain?.id);
+  
+  console.log("🎬 MessageForm loaded!", {
+    chainId: chain?.id,
+    isConnected,
+    contractAddress,
+    activeVersionKey: (activeVersion as any)?.key
+  });
 
   const [receiver, setReceiver] = useState("");
   const [content, setContent] = useState("");
@@ -81,6 +88,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     setUnlock(formatted);
     // Kullanıcının timezone'unu al
     setUserTimezone(dayjs.tz.guess());
+    console.log("✅ Component mounted successfully");
   }, []);
 
   // Unlock timestamp hesaplama (preset veya custom)

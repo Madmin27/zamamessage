@@ -14,6 +14,7 @@ export function Providers({ children }: PropsWithChildren) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    console.log("🚀 Providers mounted");
     setMounted(true);
   }, []);
   // Convert supportedChains to wagmi chain format

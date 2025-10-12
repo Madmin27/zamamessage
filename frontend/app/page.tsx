@@ -10,6 +10,8 @@ import { appConfig } from "../lib/env";
 
 export default function HomePage() {
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  
+  console.log("🏠 HomePage loaded");
 
   // Callback'i sabitle - her render'da aynı referans
   const handleMessageSubmitted = useCallback(() => {
