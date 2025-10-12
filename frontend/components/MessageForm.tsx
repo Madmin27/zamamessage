@@ -10,7 +10,6 @@ import { chronoMessageZamaAbi } from "../lib/abi-zama";
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
-import { useVersioning } from "./VersionProvider";
 // Dynamic import for Zama SDK (browser-only)
 // import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk/web";
 
@@ -32,15 +31,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const { chain } = useNetwork();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
-  const { getSelectedVersion } = useVersioning();
-  const activeVersion = getSelectedVersion(chain?.id);
   
-  console.log("🎬 MessageForm loaded!", {
-    chainId: chain?.id,
-    isConnected,
-    contractAddress,
-    activeVersionKey: (activeVersion as any)?.key
-  });
+  // Zama FHE only - No version switching needed
+  const isZamaContract = true; // Her zaman Zama kullan
 
   const [receiver, setReceiver] = useState("");
   const [content, setContent] = useState("");
@@ -88,7 +81,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     setUnlock(formatted);
     // Kullanıcının timezone'unu al
     setUserTimezone(dayjs.tz.guess());
-    console.log("✅ Component mounted successfully");
+    
+    console.log("✅ MessageForm mounted", {
+      chainId: chain?.id,
+      isConnected,
+      contractAddress,
+      isZamaContract: true
+    });
   }, []);
 
   // Unlock timestamp hesaplama (preset veya custom)
@@ -117,20 +116,19 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     const initFHE = async () => {
       console.log("🚀 FHE Init check:", {
         hasContractAddress: !!contractAddress,
+        contractAddress,
         chainId: chain?.id,
-        activeVersionKey: (activeVersion as any)?.key
+        chainName: chain?.name,
+        isZamaContract: true
       });
       
-      if (!contractAddress || !chain?.id) return;
-      
-      // Check if Zama contract
-      const isZama = (activeVersion as any)?.key === 'zama';
-      console.log("🔍 Is Zama contract?", isZama);
-      
-      if (!isZama) {
-        setFheInstance(null);
+      if (!contractAddress || !chain?.id) {
+        console.log("⚠️ Missing contract or chain");
         return;
       }
+      
+      // Always Zama FHE
+      console.log("🔍 Using Zama FHE encryption");
       
       // Only Sepolia supported
       if (chain.id !== 11155111) {
@@ -155,7 +153,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     };
     
     initFHE();
-  }, [contractAddress, chain?.id, (activeVersion as any)?.key]);
+  }, [contractAddress, chain?.id]);
 
   // Encrypt content for Zama
   useEffect(() => {
@@ -224,9 +222,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     
     encryptContent();
   }, [content, ipfsHash, fheInstance, contractAddress, userAddress]);
-
-  // Check contract type
-  const isZamaContract = (activeVersion as any)?.key === 'zama';
 
   // Form validation
   useEffect(() => {
@@ -546,12 +541,12 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         onSubmit={handleSubmit}
         className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue"
       >
-      {activeVersion && (
+      {contractAddress && (
         <div className="rounded-lg border border-cyber-blue/40 bg-cyber-blue/10 px-4 py-2 text-xs text-cyber-blue">
           <p>
-            Active contract: <span className="font-semibold">{(activeVersion as any).label}</span>
+            Active contract: <span className="font-semibold">Zama FHE 🔐</span>
             {" "}
-            (<span className="font-mono">{`${(activeVersion as any).address.slice(0, 6)}…${(activeVersion as any).address.slice(-4)}`}</span>)
+            (<span className="font-mono">{`${contractAddress.slice(0, 6)}…${contractAddress.slice(-4)}`}</span>)
           </p>
         </div>
       )}
