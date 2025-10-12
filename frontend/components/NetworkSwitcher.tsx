@@ -97,8 +97,8 @@ export function NetworkSwitcher() {
           <div className="p-2">
             {displayChains.map(([key, chainConfig]) => {
               const isActive = chain?.id === chainConfig.id;
-              const hasFactory = chainConfig.factoryAddress !== '0x0000000000000000000000000000000000000000';
-              const isDeployed = hasFactory; // Kontrat deploy edilmiş mi?
+              const hasContract = chainConfig.zamaContractAddress !== '0x0000000000000000000000000000000000000000';
+              const isDeployed = hasContract; // Kontrat deploy edilmiş mi?
               const canSwitch = switchNetwork && isDeployed && !isActive;
 
               return (

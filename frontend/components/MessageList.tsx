@@ -7,12 +7,10 @@ import advancedFormat from "dayjs/plugin/advancedFormat";
 import duration from "dayjs/plugin/duration";
 import { usePublicClient, useAccount, useNetwork } from "wagmi";
 import type { PublicClient } from "viem";
-import { chronoMessageV2Abi } from "../lib/abi-v2";
-import { chronoMessageV3_2Abi } from "../lib/abi-v3.2";
+import { chronoMessageZamaAbi } from "../lib/abi-zama";
 import { appConfig } from "../lib/env";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 import { MessageCard } from "./MessageCard";
-import { useVersioning } from "./VersionProvider";
 
 dayjs.extend(relativeTime);
 dayjs.extend(advancedFormat);
@@ -297,14 +295,12 @@ export function MessageList({ refreshKey }: MessageListProps) {
   const { chain } = useNetwork();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
-  const { getSelectedVersion } = useVersioning();
-  const activeVersion = getSelectedVersion(chain?.id);
   
-  // V3.2 contract mu kontrol et
-  const isV3_2Contract = activeVersion?.key === 'v3.2';
+  // Artık sadece Zama kullanıyoruz
+  const isZamaContract = true;
   
-  // ABI seçimi: v3.2 veya v2
-  const contractAbi = isV3_2Contract ? chronoMessageV3_2Abi : chronoMessageV2Abi;
+  // Sadece Zama ABI kullan
+  const contractAbi = chronoMessageZamaAbi;
   
   const [items, setItems] = useState<MessageViewModel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -313,6 +309,21 @@ export function MessageList({ refreshKey }: MessageListProps) {
   const [mounted, setMounted] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [unlockedMessageIds, setUnlockedMessageIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<'all' | 'unread' | 'unlocked' | 'locked' | 'paid' | 'unpaid' | 'pending' | 'files'>('all');
+  const [hiddenMessages, setHiddenMessages] = useState<Set<string>>(() => {
+    // Load from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hiddenMessages');
+      if (saved) {
+        try {
+          return new Set(JSON.parse(saved));
+        } catch {
+          return new Set();
+        }
+      }
+    }
+    return new Set();
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -336,136 +347,78 @@ export function MessageList({ refreshKey }: MessageListProps) {
     setError(null);
 
     try {
-      // Kullanıcının gönderdiği ve aldığı mesaj ID'lerini al
-      console.log('📡 Fetching messages with ABI:', isV3_2Contract ? 'SealedMessage v3.2' : 'SealedMessage v2');
-      
-      let sentIds: any = [];
-      let receivedIds: any = [];
-      
-      try {
-        const result = await client.readContract({
-          address: contractAddress,
-          abi: contractAbi as any,
-          functionName: "getSentMessages",
-          args: [userAddress as `0x${string}`]
-        });
-        sentIds = result;
-        console.log('✅ getSentMessages raw result:', result);
-      } catch (err) {
-        console.error('❌ getSentMessages error:', err);
-        sentIds = [];
-      }
-
-      try {
-        const result = await client.readContract({
-          address: contractAddress,
-          abi: contractAbi as any,
-          functionName: "getReceivedMessages",
-          args: [userAddress as `0x${string}`]
-        });
-        receivedIds = result;
-        console.log('✅ getReceivedMessages raw result:', result);
-      } catch (err) {
-        console.error('❌ getReceivedMessages error:', err);
-        receivedIds = [];
-      }
-
-      // Array validation BEFORE any spread operations
-      if (!sentIds || !Array.isArray(sentIds)) {
-        console.warn('⚠️ sentIds is not an array:', sentIds);
-        sentIds = [];
-      }
-      if (!receivedIds || !Array.isArray(receivedIds)) {
-        console.warn('⚠️ receivedIds is not an array:', receivedIds);
-        receivedIds = [];
-      }
-
-      console.log('📦 Validated arrays - Sent:', sentIds.length, 'Received:', receivedIds.length);
-
-      // NOW safe to spread
-      const allIds = [...new Set([...(sentIds as bigint[]), ...(receivedIds as bigint[])])];
-
-      if (allIds.length === 0) {
-        setItems([]);
-        setLastUpdated(new Date());
+      // Zama contract için farklı yükleme stratejisi
+      if (isZamaContract) {
+        console.log('📡 Loading Zama FHE messages...');
+        
+        // Zama contract: messageCount ile iterate et
+        try {
+          const messageCountResult = await client.readContract({
+            address: contractAddress,
+            abi: contractAbi as any,
+            functionName: "messageCount",
+            args: []
+          });
+          
+          const messageCount = Number(messageCountResult);
+          console.log(`📊 Total messages in Zama contract: ${messageCount}`);
+          
+          const allMessages: MessageViewModel[] = [];
+          
+          // Her mesajın metadata'sını yükle
+          for (let i = 0; i < messageCount; i++) {
+            try {
+              const metadata = await client.readContract({
+                address: contractAddress,
+                abi: contractAbi as any,
+                functionName: "getMessageMetadata",
+                args: [BigInt(i)]
+              }) as [string, string, bigint, boolean];
+              
+              const [sender, receiver, unlockTime, isUnlocked] = metadata;
+              
+              // Kullanıcının gönderdiği VEYA aldığı mesajları filtrele
+              const isSender = sender.toLowerCase() === userAddress.toLowerCase();
+              const isReceiver = receiver.toLowerCase() === userAddress.toLowerCase();
+              
+              if (isSender || isReceiver) {
+                allMessages.push({
+                  id: BigInt(i),
+                  sender: sender,
+                  receiver: receiver,
+                  unlockTime: unlockTime,
+                  unlockDate: dayjs.unix(Number(unlockTime)).format('YYYY-MM-DD HH:mm:ss'),
+                  unlocked: isUnlocked,
+                  isRead: false,
+                  isSent: isSender,
+                  conditionType: 0, // TIME_LOCK only
+                  contentType: 2, // ENCRYPTED
+                  relative: dayjs.unix(Number(unlockTime)).fromNow(),
+                  content: "[Encrypted with FHE 🔐]"
+                });
+              }
+            } catch (err) {
+              console.warn(`⚠️ Couldn't load message ${i}:`, err);
+            }
+          }
+          
+          console.log(`✅ Loaded ${allMessages.length} Zama messages`);
+          setItems(allMessages);
+          setLastUpdated(new Date());
+        } catch (err) {
+          console.error('❌ Error loading Zama messages:', err);
+          setError('Failed to load messages');
+        }
         setLoading(false);
-        return;
-      }
-
-      // Mesajları yükle - userAddress'i account parametresi olarak geç + isV3 flag
-      const results = await Promise.all(
-        allIds.map((id) => fetchMessage(
-          client, 
-          contractAddress, 
-          contractAbi, 
-          id, 
-          userAddress, 
-          userAddress as `0x${string}`,
-          isV3_2Contract // V3.2 contract mu?
-        ))
-      );
-      
-      // Null değerleri filtrele (yetki hatası olanlar)
-      const validMessages = results.filter((msg): msg is MessageViewModel => msg !== null);
-      
-      // Transaction hash'lerini çek
-      const txHashMap = await fetchTransactionHashes(
-        client,
-        contractAddress,
-        contractAbi,
-        allIds
-      );
-      
-      // Transaction hash'lerini mesajlara ekle
-      validMessages.forEach(msg => {
-        const txData = txHashMap.get(msg.id.toString());
-        if (txData) {
-          msg.transactionHash = txData.sentTxHash;
-          msg.paymentTxHash = txData.paymentTxHash;
-        }
-      });
-      
-      // Tarihe göre sırala (EN YENİ ÖNCE - descending order)
-      // Payment mesajları (unlockTime=0) için özel davranış: message ID'ye göre sırala (ID büyük = yeni)
-      validMessages.sort((a, b) => {
-        // Payment mesajları (conditionType=1, unlockTime=0) için özel mantık
-        const aIsPayment = a.conditionType === 1 || (a.unlockTime === 0n && a.timestamp === undefined);
-        const bIsPayment = b.conditionType === 1 || (b.unlockTime === 0n && b.timestamp === undefined);
-        
-        // Her iki mesaj da payment ise: ID'ye göre sırala (ID büyük = yeni mesaj)
-        if (aIsPayment && bIsPayment) {
-          return Number(b.id) - Number(a.id);
-        }
-        
-        // Payment mesajlar her zaman en üstte (öncelikli)
-        if (aIsPayment) return -1; // a önce gelsin
-        if (bIsPayment) return 1;  // b önce gelsin
-        
-        // Normal mesajlar için: timestamp veya unlockTime'a göre
-        const aTime = a.timestamp ?? a.unlockTime ?? 0n;
-        const bTime = b.timestamp ?? b.unlockTime ?? 0n;
-        
-        return Number(bTime) - Number(aTime); // Büyükten küçüğe (yeni → eski)
-      });
-      
-      // Yeni unlock olan mesajları kontrol et (SADECE henüz okunmamış olanlar)
-      const newlyUnlocked = validMessages.filter(msg => 
-        msg.id && // id undefined değilse
-        msg.unlocked && 
-        !msg.isSent && 
-        !msg.isRead && 
-        !unlockedMessageIds.has(msg.id.toString())
-      );
-      
-      if (newlyUnlocked.length > 0) {
-        newlyUnlocked.forEach(msg => {
-          showToast(`🔓 Message #${msg.id} unlocked! You can read it now.`, 'success');
-          setUnlockedMessageIds(prev => new Set(prev).add(msg.id.toString()));
-        });
+        return; // EXIT early - don't run V2/V3.2 code
       }
       
-      setItems(validMessages);
+      // V3.2 / V2 contract için artık destek yok - sadece Zama
+      console.log('⚠️ Non-Zama contract detected - this should not happen!');
+      setItems([]);
       setLastUpdated(new Date());
+      setLoading(false);
+
     } catch (err: any) {
       console.error("MessageList error:", err);
       setError(`Error: ${err.message || "An error occurred while loading messages"}. Please refresh the page.`);
@@ -486,7 +439,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
     
     const interval = setInterval(() => {
       loadMessages();
-    }, 30000); // 30 saniye
+    }, 300000); // 5 dakika (300000 ms)
 
     return () => clearInterval(interval);
   }, [mounted, client, hasContract, contractAddress, userAddress, loadMessages]);
@@ -552,11 +505,11 @@ export function MessageList({ refreshKey }: MessageListProps) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex flex-col">
           <h2 className="text-lg font-semibold text-aurora">Messages</h2>
-          {activeVersion && (
+          {contractAddress && (
             <p className="text-xs text-slate-400">
-              Viewing data from <span className="text-sky-300 font-semibold">{activeVersion.label}</span>
+              Viewing data from <span className="text-sky-300 font-semibold">Zama FHE</span>
               {" "}
-              (<span className="font-mono text-slate-500">{`${activeVersion.address.slice(0, 6)}…${activeVersion.address.slice(-4)}`}</span>)
+              (<span className="font-mono text-slate-500">{`${contractAddress.slice(0, 6)}…${contractAddress.slice(-4)}`}</span>)
             </p>
           )}
         </div>
@@ -579,6 +532,42 @@ export function MessageList({ refreshKey }: MessageListProps) {
         </div>
       )}
 
+      {/* Filter Buttons */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <span className="text-xs text-slate-400 mr-2">Filter:</span>
+        {['all', 'unread', 'locked', 'unlocked', 'pending', 'paid', 'unpaid', 'files'].map((filterOption) => (
+          <button
+            key={filterOption}
+            onClick={() => setFilter(filterOption as any)}
+            className={`
+              px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+              ${filter === filterOption 
+                ? 'bg-aurora text-white shadow-lg shadow-aurora/20' 
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+              }
+            `}
+          >
+            {filterOption === 'all' && '📋 All'}
+            {filterOption === 'unread' && '🆕 Unread'}
+            {filterOption === 'locked' && '🔒 Locked'}
+            {filterOption === 'unlocked' && '🔓 Unlocked'}
+            {filterOption === 'pending' && '⏳ Pending'}
+            {filterOption === 'paid' && '✅ Paid'}
+            {filterOption === 'unpaid' && '❌ Unpaid'}
+            {filterOption === 'files' && '📎 Files'}
+            {filterOption === 'files' && '📎 Files'}
+          </button>
+        ))}
+        {hiddenMessages.size > 0 && (
+          <button
+            onClick={() => setHiddenMessages(new Set())}
+            className="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 transition-all"
+          >
+            🔄 Show Hidden ({hiddenMessages.size})
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-aurora border-t-transparent"></div>
@@ -590,7 +579,44 @@ export function MessageList({ refreshKey }: MessageListProps) {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {items.map((item, index) => {
+          {items
+            .filter((item) => {
+              // Filter by hidden status
+              if (hiddenMessages.has(item.id.toString())) return false;
+              
+              // Filter by type
+              if (filter === 'all') return true;
+              
+              // Unread: Unlocked ve henüz okunmamış (sadece alıcılar için)
+              if (filter === 'unread') return !item.isSent && item.unlocked && !item.isRead;
+              
+              // Locked: Henüz unlock olmamış
+              if (filter === 'locked') return !item.unlocked;
+              
+              // Unlocked: Unlock olmuş
+              if (filter === 'unlocked') return item.unlocked;
+              
+              // Pending: Time-locked ve süresi dolmamış (alıcı için)
+              if (filter === 'pending') {
+                return !item.isSent && !item.unlocked && item.conditionType === 0 && item.unlockTime > BigInt(Math.floor(Date.now() / 1000));
+              }
+              
+              // Paid: Payment-locked VE ödeme yapılmış (paidAmount > 0)
+              if (filter === 'paid') {
+                return item.conditionType === 1 && item.paidAmount && item.paidAmount > 0n;
+              }
+              
+              // Unpaid: Payment-locked ANCAK henüz ödeme yapılmamış
+              if (filter === 'unpaid') {
+                return item.conditionType === 1 && (!item.paidAmount || item.paidAmount === 0n);
+              }
+              
+              // Files: IPFS dosya içeren
+              if (filter === 'files') return item.contentType === 1;
+              
+              return true;
+            })
+            .map((item, index) => {
             // Safeguard: undefined değerleri kontrol et (0n geçerli!)
             if (item.id === undefined || item.unlockTime === undefined) {
               console.warn('⚠️ Invalid message item:', item);
@@ -614,6 +640,13 @@ export function MessageList({ refreshKey }: MessageListProps) {
                 transactionHash={item.transactionHash}
                 paymentTxHash={item.paymentTxHash}
                 contentType={item.contentType}
+                onHide={() => {
+                  const newHidden = new Set(hiddenMessages);
+                  newHidden.add(item.id.toString());
+                  setHiddenMessages(newHidden);
+                  // Save to localStorage
+                  localStorage.setItem('hiddenMessages', JSON.stringify(Array.from(newHidden)));
+                }}
                 // onMessageRead kaldırıldı - mesaj okununca sayfayı yenilemesin
               />
             );

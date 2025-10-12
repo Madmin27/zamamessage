@@ -29,9 +29,9 @@ export function DeployButton({ onDeployed }: DeployButtonProps) {
     setMounted(true);
   }, []);
 
-  // Get factory address from supportedChains config
+  // Get Zama contract address from supportedChains config
   const chainConfig = chain?.id ? Object.values(supportedChains).find(c => c.id === chain.id) : undefined;
-  const factoryAddress = chainConfig?.factoryAddress;
+  const zamaContractAddress = chainConfig?.zamaContractAddress;
 
   // Debug log
   if (chain) {
@@ -39,12 +39,12 @@ export function DeployButton({ onDeployed }: DeployButtonProps) {
       chainId: chain.id,
       chainName: chain.name,
       chainConfig: chainConfig,
-      factoryAddress: factoryAddress
+      zamaContractAddress: zamaContractAddress
     });
   }
 
   const { data, write } = useContractWrite({
-    address: factoryAddress as `0x${string}`,
+    address: zamaContractAddress as `0x${string}`,
     abi: factoryAbi,
     functionName: "deployChronoMessage"
   });
@@ -92,7 +92,7 @@ export function DeployButton({ onDeployed }: DeployButtonProps) {
       return;
     }
 
-    if (!factoryAddress || factoryAddress === "0x0000000000000000000000000000000000000000") {
+    if (!zamaContractAddress || zamaContractAddress === "0x0000000000000000000000000000000000000000") {
       setError(`Bu ağda (${chain?.name}) factory henüz deploy edilmemiş`);
       return;
     }
@@ -129,7 +129,7 @@ export function DeployButton({ onDeployed }: DeployButtonProps) {
     );
   }
 
-  if (!factoryAddress || factoryAddress === "0x0000000000000000000000000000000000000000") {
+  if (!zamaContractAddress || zamaContractAddress === "0x0000000000000000000000000000000000000000") {
     return (
       <div className="rounded-lg border border-orange-600 bg-orange-900/20 p-4">
         <p className="text-sm text-orange-200">

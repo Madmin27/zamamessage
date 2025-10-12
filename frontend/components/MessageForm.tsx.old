@@ -5,19 +5,12 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
+import { useAccount, useNetwork, useWalletClient, usePublicClient } from "wagmi";
 import { chronoMessageZamaAbi } from "../lib/abi-zama";
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 import { useVersioning } from "./VersionProvider";
-// Dynamic import for Zama SDK (browser-only)
-// import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk/web";
-
-// TypeScript interface for FhevmInstance
-interface FhevmInstance {
-  createEncryptedInput: (contractAddress: string, userAddress: string) => any;
-}
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -47,17 +40,23 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [selectedTimezone, setSelectedTimezone] = useState<string>("Europe/Istanbul");
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   
-  // Dosya ekleri için state (IPFS - gelecekte kullanılacak)
+  // Zama FHE states
+  const [isSending, setIsSending] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  
+  // Dosya ekleri için state (gelecek özellik)
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [ipfsHash, setIpfsHash] = useState<string>("");
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [contentType, setContentType] = useState<0 | 1>(0); // 0=TEXT, 1=IPFS_HASH
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Zama FHE state
-  const [fheInstance, setFheInstance] = useState<FhevmInstance | null>(null);
-  const [encryptedData, setEncryptedData] = useState<{ handle: string; inputProof: string } | null>(null);
-  const [isEncrypting, setIsEncrypting] = useState(false);
+  // Form validation state
+  const [isFormValid, setIsFormValid] = useState(false);
+  
+  // Wallet client for direct transactions
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Form validation state
   const [isFormValid, setIsFormValid] = useState(false);
@@ -104,158 +103,65 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     }
   }, [unlockMode, presetDuration, unlock, selectedTimezone]);
 
-  // Initialize Zama FHE instance (Sepolia only)
+  // Form validation - Zama FHE only supports TIME_LOCK
   useEffect(() => {
-    const initFHE = async () => {
-      if (!contractAddress || !chain?.id) return;
-      
-      // Check if Zama contract
-      const isZama = (activeVersion as any)?.key === 'zama';
-      if (!isZama) {
-        setFheInstance(null);
-        return;
-      }
-      
-      // Only Sepolia supported
-      if (chain.id !== 11155111) {
-        console.warn("⚠️ Zama FHE only supports Sepolia (chainId: 11155111)");
-        setFheInstance(null);
-        return;
-      }
-      
-      try {
-        console.log("🔐 Initializing Zama FHE (Sepolia)...");
-        
-        // Dynamic import for browser-only SDK
-        const { createInstance, SepoliaConfig } = await import("@zama-fhe/relayer-sdk/web");
-        const instance = await createInstance(SepoliaConfig);
-        setFheInstance(instance as any);
-        console.log("✅ Zama FHE ready!");
-      } catch (err) {
-        console.error("❌ Zama FHE init error:", err);
-        setFheInstance(null);
-      }
-    };
-    
-    initFHE();
-  }, [contractAddress, chain?.id, (activeVersion as any)?.key]);
-
-  // Encrypt content for Zama
-  useEffect(() => {
-    const encryptContent = async () => {
-      if (!content || !fheInstance || !contractAddress || !userAddress) {
-        setEncryptedData(null);
-        return;
-      }
-      
-      setIsEncrypting(true);
-      try {
-        // Convert content to BigInt (first 32 bytes)
-        const encoder = new TextEncoder();
-        const contentBytes = encoder.encode(content.slice(0, 32));
-        const paddedBytes = new Uint8Array(32);
-        paddedBytes.set(contentBytes);
-        
-        let value = 0n;
-        for (let i = 0; i < 32; i++) {
-          value = (value << 8n) | BigInt(paddedBytes[i]);
-        }
-        
-        // Encrypt with Zama FHE
-        const input = fheInstance.createEncryptedInput(contractAddress, userAddress);
-        input.add256(value);
-        const encryptedInput = await input.encrypt();
-        
-        const handleHex = '0x' + Array.from(encryptedInput.handles[0])
-          .map((b: unknown) => (b as number).toString(16).padStart(2, '0'))
-          .join('');
-        const proofHex = '0x' + Array.from(encryptedInput.inputProof)
-          .map((b: unknown) => (b as number).toString(16).padStart(2, '0'))
-          .join('');
-        
-        setEncryptedData({ handle: handleHex, inputProof: proofHex });
-        console.log("✅ Content encrypted with Zama FHE");
-      } catch (err) {
-        console.error("❌ Encryption error:", err);
-        setEncryptedData(null);
-      } finally {
-        setIsEncrypting(false);
-      }
-    };
-    
-    encryptContent();
-  }, [content, fheInstance, contractAddress, userAddress]);
-
-  // Check contract type
-  const isZamaContract = (activeVersion as any)?.key === 'zama';
-
-  // Form validation
-  useEffect(() => {
-    let valid = false;
-    
-    // Base validations
-    const baseValid = isConnected &&
+    const valid = isConnected &&
       !!receiver &&
       isAddress(receiver) &&
       receiver.toLowerCase() !== userAddress?.toLowerCase() &&
-      content.trim().length > 0;
-    
-    // Zama contract: encrypted data + unlock time
-    valid = baseValid && 
-      !!encryptedData && 
-      !isEncrypting &&
-      unlockTimestamp > Math.floor(Date.now() / 1000);
+      content.trim().length > 0 &&
+      unlockTimestamp > Math.floor(Date.now() / 1000); // Zaman gelecekte olmalı
     
     setIsFormValid(valid);
-  }, [isConnected, receiver, userAddress, content, unlockTimestamp, encryptedData, isEncrypting]);
+  }, [isConnected, receiver, userAddress, content, unlockTimestamp]);
   
-  // Dosya yükleme fonksiyonu (IPFS - şu an kullanılmıyor)
+  // Dosya yükleme fonksiyonu
   const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Dosya boyutu kontrolü (max 25MB - güvenlik için düşürüldü)
+    // File size check (max 25MB - reduced for security)
     const maxSize = 25 * 1024 * 1024; // 25MB
     if (file.size > maxSize) {
-      setError(`❌ Dosya çok büyük! Maksimum: 25MB (Seçilen: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      setError(`❌ File too large! Maximum: 25MB (Selected: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
       return;
     }
     
-    // GÜVENLİK: Desteklenen dosya tipleri (beyaz liste)
+    // SECURITY: Supported file types (whitelist)
     const allowedTypes = {
-      // Resimler
+      // Images
       'image/png': '.png',
       'image/jpeg': '.jpg/.jpeg',
       'image/gif': '.gif',
       'image/webp': '.webp',
       'image/svg+xml': '.svg',
-      // Dökümanlar
+      // Documents
       'application/pdf': '.pdf',
       'text/plain': '.txt',
-      // Arşivler (izin verildi)
+      // Archives (allowed)
       'application/zip': '.zip',
       'application/x-rar-compressed': '.rar',
       'application/x-7z-compressed': '.7z',
-      // Video (küçük boyutlar için)
+      // Video (for small sizes)
       'video/mp4': '.mp4',
       'video/webm': '.webm'
-      // NOT: APK kaldırıldı (güvenlik riski)
+      // NOTE: APK removed (security risk)
     };
     
-    // GÜVENLİK: Dosya uzantısı ve MIME type kontrolü
+    // SECURITY: File extension and MIME type check
     const fileExtension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
     const isTypeAllowed = Object.keys(allowedTypes).includes(file.type);
     
     if (!isTypeAllowed) {
       const allowedFormats = Object.values(allowedTypes).join(', ');
-      setError(`❌ Desteklenmeyen dosya tipi!\n\n✅ İzin verilen formatlar:\n${allowedFormats}\n\n⚠️ Güvenlik nedeniyle sadece bu formatlar kabul edilir.`);
+      setError(`❌ Unsupported file type!\n\n✅ Allowed formats:\n${allowedFormats}\n\n⚠️ Only these formats are accepted for security reasons.`);
       return;
     }
     
-    // Uzantı doğrulaması (MIME type spoofing önlemi)
+    // Extension verification (MIME type spoofing prevention)
     const expectedExt = allowedTypes[file.type as keyof typeof allowedTypes];
     if (expectedExt && !expectedExt.split('/').some(ext => fileExtension === ext)) {
-      setError(`⚠️ Dosya uzantısı (${fileExtension}) dosya tipi ile uyuşmuyor! Olası güvenlik riski.`);
+      setError(`⚠️ File extension (${fileExtension}) doesn't match file type! Possible security risk.`);
       return;
     }
     
@@ -308,10 +214,46 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       setIpfsHash(hash);
       setContentType(1); // IPFS_HASH
       
-      // Dosya metadata'sını delimiter ile birleştir (smart contract'ta parse edilebilir)
-      // Format: hash|fileName|fileSize|fileType
-      const metadata = `${hash}|${file.name}|${file.size}|${file.type}`;
-      setContent(metadata); // Contract'a bu string gönderilecek
+      // Contract'a sadece IPFS hash gönder
+      // Metadata'yı JSON olarak IPFS'e yükle (opsiyonel mesaj ile birlikte)
+      const metadata = {
+        ipfsHash: hash,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        message: textMessage || "" // Kullanıcının yazdığı mesaj (opsiyonel)
+      };
+      
+      // Metadata'yı da IPFS'e yükle
+      try {
+        const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+        const metadataFormData = new FormData();
+        metadataFormData.append("file", metadataBlob, "metadata.json");
+        
+        const metadataResponse = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+          method: "POST",
+          headers: {
+            pinata_api_key: pinataApiKey,
+            pinata_secret_api_key: pinataSecretKey,
+          },
+          body: metadataFormData,
+        });
+        
+        if (metadataResponse.ok) {
+          const metadataData = await metadataResponse.json();
+          const metadataHash = metadataData.IpfsHash;
+          console.log("✅ Metadata uploaded to IPFS:", metadataHash);
+          // Contract'a metadata hash'ini gönder
+          setContent(metadataHash);
+        } else {
+          // Metadata upload başarısız, sadece dosya hash'ini gönder
+          console.warn("⚠️ Metadata upload failed, using file hash only");
+          setContent(hash);
+        }
+      } catch (metaErr) {
+        console.warn("⚠️ Metadata upload error, using file hash only:", metaErr);
+        setContent(hash);
+      }
       
     } catch (err) {
       console.error("❌ IPFS upload error:", err);
@@ -328,7 +270,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     setAttachedFile(null);
     setIpfsHash("");
     setContentType(0); // TEXT
-    setContent(""); // İçeriği temizle
+    setContent(textMessage); // Text mesajı geri yükle
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -341,25 +283,118 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     isAddress(receiver) &&
     !!content;
   // unlockTimestamp > 0 kontrolünü kaldırdık - for-fee modunda sıfır olacak
-  // Zama Contract Write - FHE encrypted
-  const { config: configZama } = usePrepareContractWrite({
-    address: contractAddress as `0x${string}`,
-    abi: chronoMessageZamaAbi,
+
+  // V3.2 için ayrı kontrol
+  const isV3_2Contract = activeVersion?.key === 'v3.2';
+  const isZamaContract = activeVersion?.key === 'zama';
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('� Contract Configuration:', {
+      activeVersion: activeVersion?.key,
+      isV3_2Contract,
+      isZamaContract,
+      feeAmount
+    });
+  }, [activeVersion, isV3_2Contract, isZamaContract, conditionType, feeAmount]);
+  
+  // V2 Contract Write
+  const { config: configV2 } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV2Abi,
     functionName: "sendMessage",
-    args: encryptedData && isZamaContract
-      ? [
-          receiver as `0x${string}`,
-          encryptedData.handle as `0x${string}`,
-          encryptedData.inputProof as `0x${string}`,
-          BigInt(unlockTimestamp)
-        ]
+    args: shouldPrepare && !isV3_2Contract
+      ? [receiver as `0x${string}`, content, BigInt(unlockTimestamp)]
       : undefined,
-    enabled: shouldPrepare && isZamaContract && !!encryptedData && !isEncrypting
+    enabled: shouldPrepare && !isV3_2Contract
+  });
+
+  // V3.2 Contract Write - TIME_LOCK mode
+  console.log('🔐 TIME_LOCK Mode Prepare:', {
+    shouldPrepare,
+    isV3_2Contract,
+    conditionType,
+    contentType,
+    contentLength: content?.length,
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "unlock-time"
   });
   
-  // Zama write hook
-  const zamaWrite = useContractWrite(configZama);
-  const { data, isLoading: isPending, write } = zamaWrite;
+  const { config: configV3_2_Time, error: errorV3_2_Time } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV3_2Abi,
+    functionName: "sendTimeLockedMessage",
+    args: shouldPrepare && isV3_2Contract && conditionType === "unlock-time"
+      ? [receiver as `0x${string}`, content, contentType, BigInt(unlockTimestamp)] // contentType eklendi
+      : undefined,
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "unlock-time"
+  });
+  
+  if (errorV3_2_Time) {
+    console.error('❌ TIME_LOCK Prepare Error:', errorV3_2_Time);
+  }
+
+  // V3.2 Contract Write - PAYMENT mode
+  const feeInWei = feeAmount ? BigInt(Math.floor(parseFloat(feeAmount) * 1e18)) : 0n;
+  
+  console.log('💰 PAYMENT Mode Prepare:', {
+    shouldPrepare,
+    isV3_2Contract,
+    conditionType,
+    feeAmount,
+    feeInWei: feeInWei.toString(),
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "for-fee" && feeInWei > 0n,
+    contractAddress,
+    receiver,
+    content
+  });
+  
+  const { config: configV3_2_Payment, error: errorV3_2_Payment } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV3_2Abi,
+    functionName: "sendPaymentLockedMessage",
+    args: shouldPrepare && isV3_2Contract && conditionType === "for-fee" && feeInWei > 0n
+      ? [receiver as `0x${string}`, content, contentType, feeInWei] // contentType eklendi
+      : undefined,
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "for-fee" && feeInWei > 0n
+  });
+  
+  if (errorV3_2_Payment) {
+    console.error('❌ PAYMENT Prepare Error:', errorV3_2_Payment);
+  }
+
+  // Write hooks
+  const v2Write = useContractWrite(configV2);
+  const v3_2_TimeWrite = useContractWrite(configV3_2_Time);
+  const v3_2_PaymentWrite = useContractWrite(configV3_2_Payment);
+
+  // Aktif versiyona ve condition type'a göre write fonksiyonunu seç
+  let activeWrite;
+  
+  if (isZamaContract) {
+    // Zama contract için şimdilik basit bir placeholder encrypt kullan
+    // TODO: Gerçek fhevmjs SDK entegrasyonu eklenecek
+    activeWrite = v3_2_TimeWrite; // Geçici olarak time write kullan (ama custom logic ile)
+    console.log('✅ Using Zama FHE contract (simplified encryption)');
+  } else if (isV3_2Contract) {
+    // V3.2: PAYMENT veya TIME_LOCK
+    activeWrite = conditionType === "for-fee" ? v3_2_PaymentWrite : v3_2_TimeWrite;
+    console.log('✅ Using SealedMessage v3.2:', conditionType === "for-fee" ? 'PAYMENT' : 'TIME_LOCK');
+  } else {
+    // V2
+    activeWrite = v2Write;
+    console.log('✅ Using SealedMessage v2');
+  }
+  
+  const { data, isLoading: isPending, write } = activeWrite || { data: undefined, isLoading: false, write: undefined };
+  
+  console.log('🔍 Active Write Status:', {
+    hasWrite: !!write,
+    isPending,
+    hasData: !!data,
+    isZamaContract,
+    contentType,
+    content: content?.substring(0, 100) + '...'
+  });
   
   const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
     hash: data?.hash 
@@ -388,6 +423,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       console.log("✅ MessageForm: Message sent successfully");
       setReceiver("");
       setContent("");
+      setTextMessage("");
       setAttachedFile(null);
       setIpfsHash("");
       setContentType(0);
@@ -416,25 +452,31 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       setError("❌ Kendine mesaj gönderemezsiniz! Lütfen farklı bir alıcı adresi girin.");
       return;
     }
-    if (content.trim().length === 0) {
-      setError("Mesaj içeriği boş olamaz.");
+    
+    // Content check: Either text message or file required
+    if (!attachedFile && textMessage.trim().length === 0) {
+      setError("Message text or file attachment required.");
       return;
     }
     
-    // Zama FHE validation
-    if (!encryptedData || isEncrypting) {
-      setError("⏳ Content encryption in progress, please wait...");
-      return;
-    }
-    
-    // Time validation
-    if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
-      setError("Please select a valid date.");
-      return;
-    }
-    if (unlockTimestamp <= Math.floor(Date.now() / 1000)) {
-      setError("Unlock time must be in the future.");
-      return;
+    // Validation'ı condition type'a göre yap
+    if (conditionType === "unlock-time") {
+      // TIME_LOCK validation
+      if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
+        setError("Please select a valid date.");
+        return;
+      }
+      if (unlockTimestamp <= Math.floor(Date.now() / 1000)) {
+        setError("Unlock time must be in the future.");
+        return;
+      }
+    } else if (conditionType === "for-fee") {
+      // PAYMENT validation
+      const fee = parseFloat(feeAmount || "0");
+      if (fee < 0.0001) {
+        setError("Minimum fee is 0.0001 ETH.");
+        return;
+      }
     }
 
     if (!write) {
@@ -445,8 +487,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     setError(null);
     
     try {
-      console.log("📤 Sending encrypted message with Zama FHE...");
-      write(); // Transaction parameters already in config
+      write(); // No arguments needed - they're in the config from usePrepareContractWrite
     } catch (err) {
       setError(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
@@ -505,6 +546,24 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         </div>
       )}
 
+      {/* Zama FHE Notice */}
+      {isZamaContract && (
+        <div className="mb-4 rounded-xl border border-purple-500/40 bg-purple-900/20 p-4 shadow-lg backdrop-blur">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🔐</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-purple-300">Zama FHE Encryption Active</h3>
+              <p className="mt-2 text-sm text-purple-200/80">
+                Messages sent with this version will be <strong>encrypted on-chain</strong> using Fully Homomorphic Encryption (FHE).
+              </p>
+              <p className="mt-1 text-xs text-purple-200/60">
+                ⚠️ Note: Currently using simplified encryption. Full fhevmjs SDK integration coming soon!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <form
         onSubmit={handleSubmit}
         className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue"
@@ -512,9 +571,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       {activeVersion && (
         <div className="rounded-lg border border-cyber-blue/40 bg-cyber-blue/10 px-4 py-2 text-xs text-cyber-blue">
           <p>
-            Active contract: <span className="font-semibold">{(activeVersion as any).label}</span>
+            Active contract: <span className="font-semibold">{activeVersion.label}</span>
             {" "}
-            (<span className="font-mono">{`${(activeVersion as any).address.slice(0, 6)}…${(activeVersion as any).address.slice(-4)}`}</span>)
+            (<span className="font-mono">{`${activeVersion.address.slice(0, 6)}…${activeVersion.address.slice(-4)}`}</span>)
           </p>
         </div>
       )}
@@ -547,15 +606,25 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
       <div className="flex flex-col gap-2">
         <label htmlFor="content" className="text-sm font-semibold uppercase tracking-wide text-cyber-blue">
-          Message
+          Message {attachedFile && <span className="text-xs text-purple-400">(optional - will be sent with file)</span>}
         </label>
         <textarea
           id="content"
-          value={content}
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setContent(event.target.value)}
-          placeholder="Write and Seal"
-          disabled={!!attachedFile} // Dosya ekliyse mesaj yazılamaz
-          className="min-h-[120px] rounded-lg border border-cyber-blue/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyber-blue focus:ring-2 focus:ring-cyber-blue/60 disabled:opacity-50 disabled:cursor-not-allowed"
+          value={textMessage}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
+            setTextMessage(event.target.value);
+            // Update metadata if file attached, otherwise write directly
+            if (attachedFile && ipfsHash) {
+              // File attached: update metadata format
+              const metadata = `${event.target.value}|||${ipfsHash}|${attachedFile.name}|${attachedFile.size}|${attachedFile.type}`;
+              setContent(metadata);
+            } else {
+              // No file: direct text
+              setContent(event.target.value);
+            }
+          }}
+          placeholder={attachedFile ? "You can add a message with the file (optional)" : "Write and Seal"}
+          className="min-h-[120px] rounded-lg border border-cyber-blue/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyber-blue focus:ring-2 focus:ring-cyber-blue/60"
         />
         
         {/* Dosya Ekleme Butonu */}
@@ -610,8 +679,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         
         <p className="text-xs text-text-light/60">
           {attachedFile 
-            ? "📎 Ekli dosya mesajınızla birlikte IPFS'e yüklendi ve blockchain'e kaydedilecek"
-            : "💡 İsteğe bağlı: Resim, PDF, Video veya APK dosyası ekleyebilirsiniz (max 50MB)"
+            ? "📎 Ekli dosya IPFS'e yüklendi. Dosya ile birlikte mesaj da gönderebilirsiniz (opsiyonel)"
+            : "💡 İsteğe bağlı: Resim, PDF, Video, ZIP, RAR dosyası ekleyebilirsiniz (max 25MB)"
           }
         </p>
       </div>
@@ -619,14 +688,48 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       {/* Condition Type Selection - Tab Buttons */}
       <div className="flex flex-col">
         <label className="text-sm font-semibold uppercase tracking-wide text-text-light/80 mb-3">
-          Unlock Time
+          Unlock Condition
         </label>
         
-        {/* Unlock Time Form */}
-        <div className="rounded-lg border-2 border-neon-green bg-neon-green/10 p-4">
+        {/* Condition Type Tabs */}
+        <div className="flex gap-0">
+          <button
+            type="button"
+            onClick={() => setConditionType("unlock-time")}
+            className={`flex-1 rounded-t-lg px-4 py-3 text-sm font-semibold transition border-t-2 border-l-2 border-r border-b-0 ${
+              conditionType === "unlock-time"
+                ? "bg-neon-green/20 border-neon-green text-neon-green shadow-glow-green"
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
+            }`}
+          >
+            ⏰ Unlock Time
+          </button>
+          <button
+            type="button"
+            onClick={() => setConditionType("for-fee")}
+            className={`flex-1 rounded-t-lg px-4 py-3 text-sm font-semibold transition border-t-2 border-r-2 border-l border-b-0 ${
+              conditionType === "for-fee"
+                ? "bg-cyan-500/20 border-cyan-400 text-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]"
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
+            }`}
+          >
+            💰 For a Fee
+          </button>
+        </div>
+
+        {/* Content Area - Matches Active Tab Color */}
+        <div className={`rounded-b-lg rounded-tr-lg border-2 border-t-0 p-4 transition ${
+          conditionType === "unlock-time"
+            ? "border-neon-green bg-neon-green/10"
+            : "border-cyan-400 bg-cyan-500/10"
+        }`}>
+        
+        {/* Unlock Time Content */}
+        {conditionType === "unlock-time" && (
           <div className="flex flex-col gap-3">
-            {/* Mode Selection */}
-            <div className="flex gap-2">
+        
+        {/* Mode Selection */}
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => {
@@ -774,26 +877,58 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             </div>
           </div>
         )}
+      </div>
+        )}
+        
+        {/* For a Fee Content */}
+        {conditionType === "for-fee" && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-text-light/80">
+              💰 Alıcı, mesajı açmak için belirtilen ücreti ödeyecek.
+            </p>
+            
+            {/* V3.2 Security Notice */}
+            {isV3_2Contract && (
+              <div className="rounded-lg bg-green-500/10 border border-green-400/40 p-3 text-xs text-green-300">
+                <p className="font-semibold">🔒 V3.2 Security Fix:</p>
+                <p className="mt-1">Ücretli mesajlar <strong>sadece ödeme ile</strong> açılır. Zaman kilidi kullanılmaz.</p>
+              </div>
+            )}
+            
+            <div className="flex flex-col gap-2">
+              <label htmlFor="feeAmount" className="text-sm font-semibold text-cyan-400">
+                Fee Amount (in native token)
+              </label>
+              <input
+                id="feeAmount"
+                type="number"
+                step="0.0001"
+                min="0.0001"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                placeholder="0.001 (minimum 0.0001)"
+                className="rounded-lg border border-cyan-400/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60"
+              />
+              <p className="text-xs text-text-light/60">
+                💡 Alıcı bu ücreti ödeyerek mesajı anında açabilir (min: 0.0001)
+              </p>
+            </div>
+            
+            <div className="rounded-lg bg-cyan-500/10 border border-cyan-400/30 p-3 text-xs text-cyan-300">
+              <p>⚡ <strong>Instant Unlock:</strong> Ücret ödendiğinde mesaj hemen açılır</p>
+              <p className="mt-1">🔒 <strong>Secure:</strong> Ücret akıllı kontrat tarafından yönetilir</p>
+              <p className="mt-1">💸 <strong>Payment:</strong> Ödeme doğrudan size gönderilir (protokol ücreti %1)</p>
+            </div>
+          </div>
+        )}
+        
         </div>
       </div>
-      </div>
-      
-      {/* Zama FHE encryption status */}
-      {isEncrypting && (
-        <div className="rounded-lg bg-neon-green/10 border border-neon-green/40 p-3 text-sm text-neon-green">
-          🔐 Encrypting message with Zama FHE...
-        </div>
-      )}
-      {encryptedData && !isEncrypting && (
-        <div className="rounded-lg bg-green-500/10 border border-green-400/40 p-3 text-sm text-green-300">
-          ✅ Message encrypted successfully with Zama FHE
-        </div>
-      )}
       
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       <button
         type="submit"
-        disabled={isPending || isConfirming || isEncrypting}
+        disabled={isPending || isConfirming}
         className="w-full rounded-lg bg-gradient-to-r from-aurora via-sky-500 to-sunset px-4 py-3 text-center text-sm font-semibold uppercase tracking-widest text-slate-900 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending || isConfirming ? "Sending transaction..." : "Send Message"}

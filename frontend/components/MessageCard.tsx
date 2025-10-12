@@ -4,12 +4,11 @@ import { useState, useEffect } from "react";
 import { useContractWrite, useWaitForTransaction, usePublicClient, useAccount, usePrepareContractWrite } from "wagmi";
 import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
-import { chronoMessageV2Abi } from "../lib/abi-v2";
-import { chronoMessageV3_2Abi } from "../lib/abi-v3.2";
+import { chronoMessageZamaAbi } from "../lib/abi-zama";
 import { appConfig } from "../lib/env";
 import { useContractAddress } from "../lib/useContractAddress";
-import { useVersioning } from "./VersionProvider";
 import { useNetwork } from "wagmi";
+import { IPFSFileDisplay } from "./IPFSFileDisplay";
 
 dayjs.extend(duration);
 
@@ -24,6 +23,7 @@ interface MessageCardProps {
   isSent: boolean;
   index: number;
   onMessageRead?: () => void;
+  onHide?: () => void; // Hide message callback
   // V3 ödeme bilgileri
   requiredPayment?: bigint;
   paidAmount?: bigint;
@@ -51,6 +51,7 @@ export function MessageCard({
   isSent,
   index,
   onMessageRead,
+  onHide,
   requiredPayment,
   paidAmount,
   conditionType,
@@ -62,25 +63,30 @@ export function MessageCard({
   const [messageContent, setMessageContent] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [localUnlocked, setLocalUnlocked] = useState(unlocked); // Payment sonrası unlock için
+  const [localIsRead, setLocalIsRead] = useState(isRead); // Payment sonrası read için
   const client = usePublicClient();
   const { address: userAddress } = useAccount();
   const contractAddress = useContractAddress();
   const { chain } = useNetwork();
-  const { getSelectedVersion } = useVersioning();
-  const activeVersion = getSelectedVersion(chain?.id);
-  const isV3_2Contract = activeVersion?.key === 'v3.2';
   
-  // V3.2 Payment unlock için prepare
-  const isPaymentLocked = conditionType === 1 && requiredPayment && requiredPayment > 0n;
-  const canUnlockWithPayment = Boolean(isPaymentLocked && !isSent && !unlocked);
+  // Artık sadece Zama kullanıyoruz
+  const isZamaContract = true;
+  
+  // Sadece Zama ABI kullan
+  const selectedAbi = chronoMessageZamaAbi;
+  
+  // Zama'da payment yok, sadece time-lock
+  const isPaymentLocked = false; // Zama supports only time-lock
+  const canUnlockWithPayment = false;
   
   const { config: paymentConfig } = usePrepareContractWrite({
     address: contractAddress,
-    abi: chronoMessageV3_2Abi,
-    functionName: "payToUnlock",
-    args: canUnlockWithPayment ? [id] : undefined,
-    value: canUnlockWithPayment ? requiredPayment : undefined,
-    enabled: canUnlockWithPayment
+    abi: chronoMessageZamaAbi as any,
+    functionName: "readMessage" as any, // Zama'da payToUnlock yok
+    args: undefined,
+    value: undefined,
+    enabled: false // Payment unlock disabled for Zama
   });
   
   const { 
@@ -106,13 +112,15 @@ export function MessageCard({
       try {
         const content = await client.readContract({
           address: contractAddress,
-          abi: chronoMessageV2Abi,
-          functionName: "getMessageContent",
+          abi: chronoMessageZamaAbi as any,
+          functionName: "readMessage" as any,
           args: [id],
           account: userAddress as `0x${string}`
-        }) as string;
+        }) as unknown as bigint; // Zama returns encrypted content
         
-        setMessageContent(content);
+        // Decrypt content (placeholder - will be replaced with real FHE decryption)
+        const decrypted = '0x' + content.toString(16);
+        setMessageContent(decrypted);
         setIsExpanded(true);
       } catch (err) {
         console.error("❌ Content could not be loaded (isRead):", err);
@@ -127,8 +135,8 @@ export function MessageCard({
   // readMessage transaction
   const { data: txData, isLoading: isReading, write: readMessage } = useContractWrite({
     address: contractAddress,
-    abi: chronoMessageV2Abi,
-    functionName: "readMessage",
+    abi: chronoMessageZamaAbi,
+    functionName: "readMessage" as any, // Type issue - will be fixed
     args: [id]
   });
 
@@ -147,16 +155,18 @@ export function MessageCard({
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       try {
-        // getMessageContent ile içeriği al (VIEW - gas yok)
+        // readMessage ile içeriği al
         const content = await client.readContract({
           address: contractAddress,
-          abi: chronoMessageV2Abi,
-          functionName: "getMessageContent",
+          abi: chronoMessageZamaAbi,
+          functionName: "readMessage" as any,
           args: [id],
           account: userAddress as `0x${string}`
-        }) as string;
+        }) as any;
 
-        setMessageContent(content);
+        // Decrypt (placeholder)
+        const decrypted = '0x' + (content?.toString(16) || 'encrypted');
+        setMessageContent(decrypted);
         setIsExpanded(true);
         onMessageRead?.();
       } catch (err: any) {
@@ -177,21 +187,26 @@ export function MessageCard({
       
       setIsLoadingContent(true);
       
+      // Payment başarılı - unlock ve read durumunu güncelle
+      setLocalUnlocked(true);
+      setLocalIsRead(true);
+      
       // Transaction confirm olduktan sonra biraz bekle
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       try {
         const content = await client.readContract({
           address: contractAddress,
-          abi: chronoMessageV3_2Abi,
-          functionName: "getMessageContent",
+          abi: chronoMessageZamaAbi,
+          functionName: "readMessage" as any,
           args: [id],
           account: userAddress as `0x${string}`
-        }) as string;
+        }) as any;
 
-        setMessageContent(content);
+        const decrypted = '0x' + (content?.toString(16) || 'encrypted');
+        setMessageContent(decrypted);
         setIsExpanded(true);
-        onMessageRead?.();
+        onMessageRead?.(); // Parent'ı bilgilendir
       } catch (err: any) {
         console.error("❌ Content could not be fetched after payment:", err);
         setMessageContent("⚠️ Content could not be loaded. Please refresh the page.");
@@ -204,7 +219,7 @@ export function MessageCard({
   }, [isPaymentSuccess, client, id, onMessageRead, userAddress, contractAddress]);
 
   const handleReadClick = () => {
-    if (!unlocked) {
+    if (!localUnlocked) {
       console.warn("❌ Message not unlocked yet");
       return;
     }
@@ -234,7 +249,7 @@ export function MessageCard({
         const diff = Number(unlockTime) - now;
         
         if (diff <= 0) {
-          setTimeLeft("🔓 Açıldı!");
+          setTimeLeft("0");
           return;
         }
 
@@ -295,17 +310,28 @@ export function MessageCard({
               </div>
             )}
           </div>
-          {!isSent && (
-            <div className={`
-              px-2 py-1 rounded-full text-xs font-semibold
-              ${unlocked 
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-              }
-            `}>
-              {unlocked ? '🔓 Unlocked' : '🔒 Locked'}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {!isSent && (
+              <div className={`
+                px-2 py-1 rounded-full text-xs font-semibold
+                ${unlocked 
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                  : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                }
+              `}>
+                {unlocked ? '🔓 Unlocked' : '🔒 Locked'}
+              </div>
+            )}
+            {onHide && (
+              <button
+                onClick={onHide}
+                className="p-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 transition-all text-xs"
+                title="Hide message"
+              >
+                ✖️
+              </button>
+            )}
+          </div>
         </div>
         
         {isSent ? (
@@ -360,7 +386,7 @@ export function MessageCard({
                 )}
                 <div className="pt-2 border-t border-purple-400/20">
                   <p className="text-xs text-purple-300/70 italic">
-                    ⚠️ Dosyayı açmadan önce göndereni doğrulayın
+                    ⚠️ Verify sender before opening the file
                   </p>
                 </div>
               </div>
@@ -414,8 +440,8 @@ export function MessageCard({
                 <span className={`font-semibold ${
                   conditionType === 0 ? 'text-neon-green' : 'text-cyan-400'
                 }`}>
-                  {conditionType === 0 ? '⏰ Time-Locked' :
-                   conditionType === 1 ? '💰 Payment-Locked' :
+                  {conditionType === 0 ? '⏰ Time' :
+                   conditionType === 1 ? '💰 Payment' :
                    '🔀 Hybrid (Deprecated)'}
                 </span>
               </div>
@@ -473,132 +499,54 @@ export function MessageCard({
           <p className="italic text-blue-300/70 flex items-center gap-2">
             <span>🚫</span> You cannot view the message you sent.
           </p>
-        ) : unlocked ? (
+        ) : localUnlocked ? (
           <div className="space-y-2">
-            {isRead && !messageContent && isLoadingContent ? (
+            {localIsRead && !messageContent && isLoadingContent ? (
               // Okunan mesaj yükleniyor
               <div className="text-slate-400 italic flex items-center gap-2">
                 <span className="animate-spin">⟳</span> Loading content...
               </div>
-            ) : !messageContent && !isExpanded && !isRead ? (
-              // Henüz okunmamış, butonu göster
-              <button
-                onClick={handleReadClick}
-                disabled={isReading || isConfirming || isLoadingContent}
-                className="w-full text-left px-3 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 
-                  border border-green-500/30 text-green-300 transition-colors
-                  disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isReading || isConfirming || isLoadingContent ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-spin">⟳</span> 
-                    {isLoadingContent ? "Loading content..." : "Reading..."}
-                  </span>
-                ) : (
-                  <span>🔓 Click to read message</span>
+            ) : !localIsRead ? (
+              // Henüz okunmamış, uyarı + butonu göster
+              <>
+                {/* File warning - Unlocked but not read yet */}
+                {contentType === 1 && (
+                  <div className="mb-3 rounded-lg bg-purple-900/20 border border-purple-400/40 p-3">
+                    <p className="text-xs text-purple-300 italic flex items-center gap-2">
+                      <span>⚠️</span>
+                      <span>Verify sender before opening the file. Sender: <code className="font-mono text-purple-200">{sender.substring(0, 10)}...{sender.substring(sender.length - 8)}</code></span>
+                    </p>
+                  </div>
                 )}
-              </button>
+                
+                <button
+                  onClick={handleReadClick}
+                  disabled={isReading || isConfirming || isLoadingContent}
+                  className="w-full text-left px-3 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 
+                    border border-green-500/30 text-green-300 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isReading || isConfirming || isLoadingContent ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin">⟳</span> 
+                      {isLoadingContent ? "Loading content..." : "Reading..."}
+                    </span>
+                  ) : (
+                    <span>🔓 Click to read message</span>
+                  )}
+                </button>
+              </>
             ) : messageContent ? (
               // İçerik yüklenmiş, göster
               <div className="space-y-2">
                 {contentType === 1 ? (
-                  // IPFS dosya - metadata parse et
-                  (() => {
-                    // Format: hash|fileName|fileSize|fileType
-                    const parts = messageContent.split('|');
-                    const ipfsHash = parts[0] || messageContent;
-                    const fileName = parts[1] || 'unknown';
-                    const fileSize = parts[2] ? parseInt(parts[2]) : 0;
-                    const fileType = parts[3] || 'unknown';
-                    
-                    return (
-                      <div className="space-y-3">
-                        {/* Dosya bilgileri */}
-                        <div className="rounded-lg bg-purple-900/20 border border-purple-400/40 p-3 space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-purple-300">
-                            <span>📎</span>
-                            <span className="font-semibold">Ekli Dosya</span>
-                          </div>
-                          <div className="space-y-1 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="text-purple-400/70">Dosya adı:</span>
-                              <span className="font-mono text-purple-200 break-all">{fileName}</span>
-                            </div>
-                            {fileSize > 0 && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-purple-400/70">Boyut:</span>
-                                <span className="text-purple-200">{(fileSize / 1024 / 1024).toFixed(2)} MB</span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <span className="text-purple-400/70">Tip:</span>
-                              <span className="text-purple-200">{fileType}</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Dosya önizlemesi */}
-                        {fileType.startsWith('image/') && (
-                          <div className="rounded-lg overflow-hidden border border-slate-700">
-                            <img 
-                              src={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`}
-                              alt={fileName} 
-                              className="w-full max-h-96 object-contain bg-slate-900"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                if (!target.src.includes('ipfs.io')) {
-                                  target.src = `https://ipfs.io/ipfs/${ipfsHash}`;
-                                }
-                              }}
-                            />
-                          </div>
-                        )}
-                        
-                        {fileType.startsWith('video/') && (
-                          <div className="rounded-lg overflow-hidden border border-slate-700">
-                            <video 
-                              controls 
-                              className="w-full max-h-96 bg-slate-900"
-                              src={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`}
-                            />
-                          </div>
-                        )}
-                        
-                        {/* IPFS hash ve download */}
-                        <div className="flex flex-col gap-2 rounded-lg bg-slate-900/50 border border-slate-700 p-3">
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="text-slate-500">IPFS Hash:</span>
-                            <code className="font-mono text-cyan-400 break-all">
-                              {ipfsHash}
-                            </code>
-                          </div>
-                          <div className="flex gap-2">
-                            <a
-                              href={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`}
-                              download={fileName}
-                              className="flex-1 text-center px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 
-                                border border-blue-500/40 text-blue-300 transition text-sm font-medium"
-                            >
-                              � İndir (Pinata)
-                            </a>
-                            <a
-                              href={`https://ipfs.io/ipfs/${ipfsHash}`}
-                              download={fileName}
-                              className="flex-1 text-center px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 
-                                border border-purple-500/40 text-purple-300 transition text-sm font-medium"
-                            >
-                              📥 İndir (IPFS.io)
-                            </a>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()
+                  // IPFS dosya - metadata hash'inden bilgileri fetch et
+                  <IPFSFileDisplay metadataHash={messageContent} />
                 ) : (
                   // TEXT mesaj - normal gösterim
                   <p className="text-slate-200 whitespace-pre-wrap">{messageContent}</p>
                 )}
-                {isRead && (
+                {localIsRead && (
                   <p className="text-xs text-green-400 flex items-center gap-1">
                     <span>✓</span> Read
                   </p>
@@ -608,9 +556,30 @@ export function MessageCard({
           </div>
         ) : (
           // Mesaj henüz unlock olmamış
-          <div className="space-y-2">
-            {canUnlockWithPayment && isV3_2Contract ? (
-              // Payment-locked mesaj için unlock butonu
+          <div className="space-y-3">
+            {/* File Preview - contentType=1 ise file metadata göster */}
+            {contentType === 1 && (
+              <div className="rounded-lg bg-purple-900/20 border border-purple-400/40 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm text-purple-300">
+                  <span>📎</span>
+                  <span className="font-semibold">File Attached</span>
+                </div>
+                <p className="text-xs text-purple-200 italic">
+                  ⚠️ This message contains a file. Verify the sender before unlocking and opening.
+                </p>
+                <div className="text-xs text-slate-300 space-y-1">
+                  <div>
+                    <span className="text-slate-500">Sender:</span>{' '}
+                    <code className="font-mono text-purple-200">
+                      {sender.substring(0, 10)}...{sender.substring(sender.length - 8)}
+                    </code>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {canUnlockWithPayment ? (
+              // Payment-locked mesaj için unlock butonu (Zama'da yok)
               <button
                 onClick={() => unlockWithPayment?.()}
                 disabled={isPaymentPending || isPaymentConfirming || !unlockWithPayment}
