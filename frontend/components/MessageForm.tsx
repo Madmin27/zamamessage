@@ -107,10 +107,18 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Initialize Zama FHE instance (Sepolia only)
   useEffect(() => {
     const initFHE = async () => {
+      console.log("🚀 FHE Init check:", {
+        hasContractAddress: !!contractAddress,
+        chainId: chain?.id,
+        activeVersionKey: (activeVersion as any)?.key
+      });
+      
       if (!contractAddress || !chain?.id) return;
       
       // Check if Zama contract
       const isZama = (activeVersion as any)?.key === 'zama';
+      console.log("🔍 Is Zama contract?", isZama);
+      
       if (!isZama) {
         setFheInstance(null);
         return;
@@ -118,7 +126,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       
       // Only Sepolia supported
       if (chain.id !== 11155111) {
-        console.warn("⚠️ Zama FHE only supports Sepolia (chainId: 11155111)");
+        console.warn("⚠️ Zama FHE only supports Sepolia (chainId: 11155111), current:", chain.id);
         setFheInstance(null);
         return;
       }
@@ -128,9 +136,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         
         // Dynamic import for browser-only SDK
         const { createInstance, SepoliaConfig } = await import("@zama-fhe/relayer-sdk/web");
+        console.log("📦 SDK loaded, creating instance...");
         const instance = await createInstance(SepoliaConfig);
         setFheInstance(instance as any);
-        console.log("✅ Zama FHE ready!");
+        console.log("✅ Zama FHE ready!", instance);
       } catch (err) {
         console.error("❌ Zama FHE init error:", err);
         setFheInstance(null);
@@ -146,15 +155,27 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       // Mesaj veya IPFS hash olmalı
       const hasContent = content.trim().length > 0 || ipfsHash.length > 0;
       
+      console.log("🔍 Encryption check:", {
+        hasContent,
+        contentLength: content.length,
+        ipfsHashLength: ipfsHash.length,
+        hasFheInstance: !!fheInstance,
+        hasContractAddress: !!contractAddress,
+        hasUserAddress: !!userAddress
+      });
+      
       if (!hasContent || !fheInstance || !contractAddress || !userAddress) {
         setEncryptedData(null);
+        setIsEncrypting(false); // ← ÖNEMLİ: Burada da false'a çek
         return;
       }
       
       setIsEncrypting(true);
+      console.log("🔐 Starting encryption...");
       try {
         // Şifrelenecek veri: Mesaj varsa mesaj, yoksa IPFS hash
         const dataToEncrypt = content.trim() || ipfsHash;
+        console.log("📝 Data to encrypt:", dataToEncrypt.substring(0, 50));
         
         // Convert content to BigInt (first 32 bytes)
         const encoder = new TextEncoder();
@@ -180,11 +201,15 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           .join('');
         
         setEncryptedData({ handle: handleHex, inputProof: proofHex });
-        console.log("✅ Content encrypted with Zama FHE");
+        console.log("✅ Content encrypted with Zama FHE", {
+          handleLength: handleHex.length,
+          proofLength: proofHex.length
+        });
       } catch (err) {
         console.error("❌ Encryption error:", err);
         setEncryptedData(null);
       } finally {
+        console.log("🏁 Encryption finished, setting isEncrypting=false");
         setIsEncrypting(false);
       }
     };
