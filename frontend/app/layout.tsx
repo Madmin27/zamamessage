@@ -50,6 +50,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            // Polyfill for Zama SDK (WASM needs global)
+            if (typeof global === 'undefined') {
+              window.global = window;
+            }
+          `
+        }} />
+      </head>
       <body className="min-h-screen bg-midnight text-slate-100" suppressHydrationWarning>
         <FarcasterProvider>
           <Providers>
