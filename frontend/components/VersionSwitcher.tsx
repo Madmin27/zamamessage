@@ -8,10 +8,15 @@ export function VersionSwitcher() {
   const { chain } = useNetwork();
   const { getAvailableVersions, getSelectedVersion, selectVersion } = useVersioning();
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const versions = useMemo(() => getAvailableVersions(chain?.id), [chain?.id, getAvailableVersions]);
   const selected = useMemo(() => getSelectedVersion(chain?.id), [chain?.id, getSelectedVersion]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -29,10 +34,10 @@ export function VersionSwitcher() {
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative z-40" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-2 shadow-lg backdrop-blur transition hover:border-sky-400 hover:bg-slate-900/80"
+        className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-2 shadow-lg transition hover:border-sky-400 hover:bg-slate-900/80"
       >
         <div className="flex flex-col text-left">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Contract Version</span>
@@ -48,8 +53,8 @@ export function VersionSwitcher() {
         </svg>
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 right-0 z-50 mt-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl">
+      {mounted && isOpen && (
+        <div className="absolute left-0 right-0 z-[100] mt-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl">
           <div className="divide-y divide-slate-800">
             {versions.map((version) => {
               const isActive = version.key === selected.key;

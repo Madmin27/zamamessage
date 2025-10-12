@@ -39,23 +39,15 @@ export const supportedChains: Record<string, ChainDefinition> = {
       infura: 'https://sepolia.infura.io/v3/e6aecc89c96940a5a671b2ad96afe68a'
     },
     blockExplorer: 'https://sepolia.etherscan.io',
-    factoryAddress: '0x86D0b9c5579578E2029A504DD40254f76eFaa827', // ✅ V3 (Security Fix)
+    factoryAddress: '0x08b015b740be3d61fA6a0cB1b589480b39Ab6b65', // ✅ V3.2 (HYBRID removed)
     versions: [
       {
-        key: 'v3_secure',
-        label: 'ChronoMessage v3.1 (Security Fix)',
-        address: '0x86D0b9c5579578E2029A504DD40254f76eFaa827',
-        description: 'Multi-condition + Payment timestamp validation',
+        key: 'v3.2',
+        label: 'SealedMessage v3.2 🔒 (Current)',
+        address: '0x08b015b740be3d61fA6a0cB1b589480b39Ab6b65',
+        description: 'SECURITY FIX: HYBRID mode removed. Only TIME_LOCK or PAYMENT.',
         deployedAt: '2025-10-11',
         isDefault: true
-      },
-      {
-        key: 'v3',
-        label: 'ChronoMessage v3 (Deprecated)',
-        address: '0x665a26E1B4eeDB6D33a4B50d25eD0c2FEfA1102f',
-        description: '⚠️ Security issue - do not use',
-        deployedAt: '2025-10-11',
-        isDefault: false
       },
       {
         key: 'v2_2',
@@ -85,23 +77,15 @@ export const supportedChains: Record<string, ChainDefinition> = {
       public: 'https://sepolia.base.org'
     },
     blockExplorer: 'https://sepolia.basescan.org',
-    factoryAddress: '0x9C01F6fC426028d327a668E52d311042Cf3b38F3', // ✅ V3.1 (Security Fix)
+    factoryAddress: '0x31E5703D03272b47957c7f2C043242C66cE1330d', // ✅ V3.2 (HYBRID removed)
     versions: [
       {
-        key: 'v3_secure',
-        label: 'ChronoMessage v3.1 (Security Fix)',
-        address: '0x9C01F6fC426028d327a668E52d311042Cf3b38F3',
-        description: 'Multi-condition + Payment timestamp validation',
+        key: 'v3.2',
+        label: 'SealedMessage v3.2 🔒 (Current)',
+        address: '0x31E5703D03272b47957c7f2C043242C66cE1330d',
+        description: 'SECURITY FIX: HYBRID mode removed. Only TIME_LOCK or PAYMENT.',
         deployedAt: '2025-10-11',
         isDefault: true
-      },
-      {
-        key: 'v3',
-        label: 'ChronoMessage v3 (Deprecated)',
-        address: '0xf95C75Ae510e05B1cf6B0d810BAc38be8Bb57Faa',
-        description: '⚠️ Do not use',
-        deployedAt: '2025-10-11',
-        isDefault: false
       },
       {
         key: 'v2',
@@ -124,23 +108,15 @@ export const supportedChains: Record<string, ChainDefinition> = {
       public: 'https://sepolia-rpc.scroll.io'
     },
     blockExplorer: 'https://sepolia.scrollscan.dev',
-    factoryAddress: '0x55A6659286ef8D82c97E5cf243731e6f960a8EbD', // ✅ V3.1 (Security Fix)
+    factoryAddress: '0xaFEd4f18E1957Dc841433D5051f2441dE8059941', // ✅ V3.2 (HYBRID removed) - Deployed Oct 12
     versions: [
       {
-        key: 'v3_secure',
-        label: 'ChronoMessage v3.1 (Security Fix)',
-        address: '0x55A6659286ef8D82c97E5cf243731e6f960a8EbD',
-        description: 'Multi-condition + Payment timestamp validation',
-        deployedAt: '2025-10-11',
+        key: 'v3.2',
+        label: 'SealedMessage v3.2 🔒 (Current)',
+        address: '0xaFEd4f18E1957Dc841433D5051f2441dE8059941',
+        description: 'SECURITY FIX: HYBRID mode removed. Only TIME_LOCK or PAYMENT.',
+        deployedAt: '2025-10-12',
         isDefault: true
-      },
-      {
-        key: 'v3',
-        label: 'ChronoMessage v3 (Deprecated)',
-        address: '0xcDF777FbB6aBa2c4C54Ff2a91B2b2Ef7708597e4',
-        description: '⚠️ Do not use',
-        deployedAt: '2025-10-11',
-        isDefault: false
       },
       {
         key: 'v2',

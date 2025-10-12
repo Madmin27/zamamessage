@@ -1,12 +1,13 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
+import { chronoMessageV3_2Abi } from "../lib/abi-v3.2";
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
@@ -41,6 +42,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [userTimezone, setUserTimezone] = useState<string>("UTC");
   const [selectedTimezone, setSelectedTimezone] = useState<string>("Europe/Istanbul");
   const [isPresetsOpen, setIsPresetsOpen] = useState(false); // Quick Select açık/kapalı durumu
+  
+  // Dosya ekleri için state
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [ipfsHash, setIpfsHash] = useState<string>("");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [contentType, setContentType] = useState<0 | 1>(0); // 0=TEXT, 1=IPFS_HASH
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Form validation state
   const [isFormValid, setIsFormValid] = useState(false);
@@ -89,35 +97,209 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   // Form validation
   useEffect(() => {
-    const valid = 
-      isConnected &&
+    let valid = false;
+    
+    // Ortak validationlar
+    const baseValid = isConnected &&
       !!receiver &&
       isAddress(receiver) &&
-      receiver.toLowerCase() !== userAddress?.toLowerCase() && // ✅ Kendine mesaj gönderme kontrolü
-      content.trim().length > 0 &&
-      unlockTimestamp > Math.floor(Date.now() / 1000);
+      receiver.toLowerCase() !== userAddress?.toLowerCase() &&
+      (content.trim().length > 0 || ipfsHash.length > 0); // Mesaj veya dosya olmalı
+    
+    if (conditionType === "unlock-time") {
+      // TIME_LOCK: zaman gelecekte olmalı
+      valid = baseValid && unlockTimestamp > Math.floor(Date.now() / 1000);
+    } else if (conditionType === "for-fee") {
+      // PAYMENT: ücret > 0 olmalı (zaman şartı yok)
+      const fee = parseFloat(feeAmount || "0");
+      valid = baseValid && fee >= 0.0001; // MIN_PAYMENT
+    }
+    
     setIsFormValid(valid);
-  }, [isConnected, receiver, userAddress, content, unlockTimestamp]);
+  }, [isConnected, receiver, userAddress, content, unlockTimestamp, conditionType, feeAmount, ipfsHash]);
+  
+  // Dosya yükleme fonksiyonu
+  const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Dosya boyutu kontrolü (max 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      setError(`Dosya çok büyük! Maksimum dosya boyutu: 50MB (Seçilen: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      return;
+    }
+    
+    // Desteklenen dosya tipleri
+    const supportedTypes = [
+      'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
+      'application/pdf',
+      'video/mp4', 'video/webm',
+      'application/vnd.android.package-archive' // APK
+    ];
+    
+    if (!supportedTypes.includes(file.type)) {
+      setError(`Desteklenmeyen dosya tipi: ${file.type}. Desteklenen: Resim (PNG/JPG/GIF), PDF, Video (MP4/WebM), APK`);
+      return;
+    }
+    
+    setAttachedFile(file);
+    setError(null);
+    
+    // IPFS'e yükle
+    await uploadToIPFS(file);
+  };
+  
+  const uploadToIPFS = async (file: File) => {
+    setUploadingFile(true);
+    setError(null);
+    
+    try {
+      // Pinata ücretsiz IPFS servisi
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      // Demo için public Pinata gateway kullan (production'da kendi API key'inizi ekleyin)
+      // NOT: Bu demo amaçlıdır, production için .env.local dosyasına ekleyin:
+      // NEXT_PUBLIC_PINATA_API_KEY=your_key
+      // NEXT_PUBLIC_PINATA_SECRET_KEY=your_secret
+      
+      const pinataApiKey = process.env.NEXT_PUBLIC_PINATA_API_KEY;
+      const pinataSecretKey = process.env.NEXT_PUBLIC_PINATA_SECRET_KEY;
+      
+      if (!pinataApiKey || !pinataSecretKey) {
+        throw new Error("⚠️ IPFS credentials not configured. Please add NEXT_PUBLIC_PINATA_API_KEY and NEXT_PUBLIC_PINATA_SECRET_KEY to .env.local");
+      }
+      
+      const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+        method: "POST",
+        headers: {
+          pinata_api_key: pinataApiKey,
+          pinata_secret_api_key: pinataSecretKey,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Upload failed: ${errorData.error || response.statusText}`);
+      }
+      
+      const data = await response.json();
+      const hash = data.IpfsHash;
+      
+      console.log("✅ Uploaded to IPFS:", hash);
+      setIpfsHash(hash);
+      setContentType(1); // IPFS_HASH
+      setContent(hash); // Contract'a hash gönderilecek
+      
+    } catch (err) {
+      console.error("❌ IPFS upload error:", err);
+      const errorMsg = err instanceof Error ? err.message : "Upload failed";
+      setError(`IPFS Upload Error: ${errorMsg}`);
+      setAttachedFile(null);
+      setIpfsHash("");
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+  
+  const removeAttachment = () => {
+    setAttachedFile(null);
+    setIpfsHash("");
+    setContentType(0); // TEXT
+    setContent(""); // İçeriği temizle
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   // Prepare contract write with proper parameters
   const shouldPrepare = isFormValid && 
     !!contractAddress && 
     !!receiver && 
     isAddress(receiver) &&
-    !!content &&
-    unlockTimestamp > 0;
+    !!content;
+  // unlockTimestamp > 0 kontrolünü kaldırdık - for-fee modunda sıfır olacak
 
-  const { config } = usePrepareContractWrite({
+  // V3.2 için ayrı kontrol
+  const isV3_2Contract = activeVersion?.key === 'v3.2';
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Contract Version Check:', {
+      activeVersion: activeVersion?.key,
+      isV3_2Contract,
+      conditionType,
+      feeAmount
+    });
+  }, [activeVersion, isV3_2Contract, conditionType, feeAmount]);
+  
+  // V2 Contract Write
+  const { config: configV2 } = usePrepareContractWrite({
     address: contractAddress,
     abi: chronoMessageV2Abi,
     functionName: "sendMessage",
-    args: shouldPrepare
+    args: shouldPrepare && !isV3_2Contract
       ? [receiver as `0x${string}`, content, BigInt(unlockTimestamp)]
       : undefined,
-    enabled: shouldPrepare
+    enabled: shouldPrepare && !isV3_2Contract
   });
 
-  const { data, isLoading: isPending, write } = useContractWrite(config);
+  // V3.2 Contract Write - TIME_LOCK mode
+  const { config: configV3_2_Time } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV3_2Abi,
+    functionName: "sendTimeLockedMessage",
+    args: shouldPrepare && isV3_2Contract && conditionType === "unlock-time"
+      ? [receiver as `0x${string}`, content, contentType, BigInt(unlockTimestamp)] // contentType eklendi
+      : undefined,
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "unlock-time"
+  });
+
+  // V3.2 Contract Write - PAYMENT mode
+  const feeInWei = feeAmount ? BigInt(Math.floor(parseFloat(feeAmount) * 1e18)) : 0n;
+  
+  console.log('💰 PAYMENT Mode Prepare:', {
+    shouldPrepare,
+    isV3_2Contract,
+    conditionType,
+    feeAmount,
+    feeInWei: feeInWei.toString(),
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "for-fee" && feeInWei > 0n,
+    contractAddress,
+    receiver,
+    content
+  });
+  
+  const { config: configV3_2_Payment } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV3_2Abi,
+    functionName: "sendPaymentLockedMessage",
+    args: shouldPrepare && isV3_2Contract && conditionType === "for-fee" && feeInWei > 0n
+      ? [receiver as `0x${string}`, content, contentType, feeInWei] // contentType eklendi
+      : undefined,
+    enabled: shouldPrepare && isV3_2Contract && conditionType === "for-fee" && feeInWei > 0n
+  });
+
+  // Write hooks
+  const v2Write = useContractWrite(configV2);
+  const v3_2_TimeWrite = useContractWrite(configV3_2_Time);
+  const v3_2_PaymentWrite = useContractWrite(configV3_2_Payment);
+
+  // Aktif versiyona ve condition type'a göre write fonksiyonunu seç
+  let activeWrite;
+  if (isV3_2Contract) {
+    // V3.2: PAYMENT veya TIME_LOCK
+    activeWrite = conditionType === "for-fee" ? v3_2_PaymentWrite : v3_2_TimeWrite;
+    console.log('✅ Using SealedMessage v3.2:', conditionType === "for-fee" ? 'PAYMENT' : 'TIME_LOCK');
+  } else {
+    // V2
+    activeWrite = v2Write;
+    console.log('✅ Using SealedMessage v2');
+  }
+  
+  const { data, isLoading: isPending, write } = activeWrite;
   
   const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
     hash: data?.hash 
@@ -146,6 +328,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       console.log("✅ MessageForm: Message sent successfully");
       setReceiver("");
       setContent("");
+      setAttachedFile(null);
+      setIpfsHash("");
+      setContentType(0);
       setError(null);
       setSuccessToast(true);
       setTimeout(() => setSuccessToast(false), 5000);
@@ -176,14 +361,24 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return;
     }
     
-    // Unlock time validation
-    if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
-      setError("Please select a valid date.");
-      return;
-    }
-    if (unlockTimestamp <= Math.floor(Date.now() / 1000)) {
-      setError("Unlock time must be in the future.");
-      return;
+    // Validation'ı condition type'a göre yap
+    if (conditionType === "unlock-time") {
+      // TIME_LOCK validation
+      if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
+        setError("Please select a valid date.");
+        return;
+      }
+      if (unlockTimestamp <= Math.floor(Date.now() / 1000)) {
+        setError("Unlock time must be in the future.");
+        return;
+      }
+    } else if (conditionType === "for-fee") {
+      // PAYMENT validation
+      const fee = parseFloat(feeAmount || "0");
+      if (fee < 0.0001) {
+        setError("Minimum fee is 0.0001 ETH.");
+        return;
+      }
     }
 
     if (!write) {
@@ -203,7 +398,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Prevent hydration mismatch
   if (!mounted) {
     return (
-      <div className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm">
+      <div className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue">
         <p className="text-sm text-text-light/60">Loading...</p>
       </div>
     );
@@ -212,7 +407,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Connect your wallet
   if (!isConnected) {
     return (
-      <div className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm">
+      <div className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue">
         <p className="text-sm text-text-light/60">Connect your wallet...</p>
       </div>
     );
@@ -245,7 +440,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       {/* Success Toast */}
       {successToast && (
         <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right duration-300">
-          <div className="rounded-lg border border-green-500/50 bg-green-900/80 px-4 py-3 shadow-lg backdrop-blur-sm">
+          <div className="rounded-lg border border-green-500/50 bg-green-900/80 px-4 py-3 shadow-lg">
             <p className="text-green-100 flex items-center gap-2">
               <span>✅</span> Message sent successfully!
             </p>
@@ -255,7 +450,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm"
+        className="space-y-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue"
       >
       {activeVersion && (
         <div className="rounded-lg border border-cyber-blue/40 bg-cyber-blue/10 px-4 py-2 text-xs text-cyber-blue">
@@ -302,8 +497,66 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           value={content}
           onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setContent(event.target.value)}
           placeholder="Write and Seal"
-          className="min-h-[120px] rounded-lg border border-cyber-blue/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyber-blue focus:ring-2 focus:ring-cyber-blue/60"
+          disabled={!!attachedFile} // Dosya ekliyse mesaj yazılamaz
+          className="min-h-[120px] rounded-lg border border-cyber-blue/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyber-blue focus:ring-2 focus:ring-cyber-blue/60 disabled:opacity-50 disabled:cursor-not-allowed"
         />
+        
+        {/* Dosya Ekleme Butonu */}
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf,video/mp4,video/webm,application/vnd.android.package-archive"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          
+          {!attachedFile ? (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFile}
+              className="flex items-center gap-2 rounded-lg border border-purple-500/40 bg-purple-900/20 px-4 py-2 text-sm font-medium text-purple-300 transition hover:bg-purple-900/30 hover:border-purple-500/60 disabled:opacity-50"
+            >
+              <span>📎</span>
+              {uploadingFile ? "Yükleniyor..." : "Dosya Ekle"}
+            </button>
+          ) : (
+            <div className="flex-1 flex items-center justify-between rounded-lg border border-green-500/40 bg-green-900/20 px-4 py-2">
+              <div className="flex items-center gap-2 text-sm text-green-300">
+                <span>
+                  {attachedFile.type.startsWith('image/') ? '🖼️' : 
+                   attachedFile.type === 'application/pdf' ? '📄' :
+                   attachedFile.type.startsWith('video/') ? '🎬' :
+                   attachedFile.type === 'application/vnd.android.package-archive' ? '📱' : '📎'}
+                </span>
+                <span className="font-medium">{attachedFile.name}</span>
+                <span className="text-xs text-green-400/60">
+                  ({(attachedFile.size / 1024 / 1024).toFixed(2)} MB)
+                </span>
+                {ipfsHash && (
+                  <span className="text-xs text-green-400 font-mono">
+                    ✅ IPFS: {ipfsHash.slice(0, 8)}...
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={removeAttachment}
+                className="text-red-400 hover:text-red-300 transition"
+              >
+                ❌
+              </button>
+            </div>
+          )}
+        </div>
+        
+        <p className="text-xs text-text-light/60">
+          {attachedFile 
+            ? "📎 Ekli dosya mesajınızla birlikte IPFS'e yüklendi ve blockchain'e kaydedilecek"
+            : "💡 İsteğe bağlı: Resim, PDF, Video veya APK dosyası ekleyebilirsiniz (max 50MB)"
+          }
+        </p>
       </div>
       
       {/* Condition Type Selection - Tab Buttons */}
@@ -320,7 +573,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             className={`flex-1 rounded-t-lg px-4 py-3 text-sm font-semibold transition border-t-2 border-l-2 border-r border-b-0 ${
               conditionType === "unlock-time"
                 ? "bg-neon-green/20 border-neon-green text-neon-green shadow-glow-green"
-                : "bg-midnight/40 border-cyber-blue/30 text-text-light/60 hover:text-text-light hover:border-cyber-blue/60"
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
             }`}
           >
             ⏰ Unlock Time
@@ -331,7 +584,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             className={`flex-1 rounded-t-lg px-4 py-3 text-sm font-semibold transition border-t-2 border-r-2 border-l border-b-0 ${
               conditionType === "for-fee"
                 ? "bg-cyan-500/20 border-cyan-400 text-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]"
-                : "bg-midnight/40 border-cyber-blue/30 text-text-light/60 hover:text-text-light hover:border-cyber-blue/60"
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
             }`}
           >
             💰 For a Fee
@@ -355,12 +608,12 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             type="button"
             onClick={() => {
               setUnlockMode("preset");
-              setIsPresetsOpen(!isPresetsOpen); // Toggle açık/kapalı
+              setIsPresetsOpen(!isPresetsOpen);
             }}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "preset"
-                ? "bg-neon-orange/20 border-2 border-neon-orange text-neon-orange shadow-glow-orange"
-                : "bg-midnight/40 border border-cyber-blue/30 text-text-light hover:border-cyber-blue/60"
+                ? "bg-aurora/20 border-2 border-aurora text-aurora "
+                : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
             }`}
           >
             ⚡ Quick Select {unlockMode === "preset" && (isPresetsOpen ? "▼" : "▶")}
@@ -508,28 +761,37 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               💰 Alıcı, mesajı açmak için belirtilen ücreti ödeyecek.
             </p>
             
+            {/* V3.2 Security Notice */}
+            {isV3_2Contract && (
+              <div className="rounded-lg bg-green-500/10 border border-green-400/40 p-3 text-xs text-green-300">
+                <p className="font-semibold">🔒 V3.2 Security Fix:</p>
+                <p className="mt-1">Ücretli mesajlar <strong>sadece ödeme ile</strong> açılır. Zaman kilidi kullanılmaz.</p>
+              </div>
+            )}
+            
             <div className="flex flex-col gap-2">
               <label htmlFor="feeAmount" className="text-sm font-semibold text-cyan-400">
-                Fee Amount (ETH/ANKR)
+                Fee Amount (in native token)
               </label>
               <input
                 id="feeAmount"
                 type="number"
-                step="0.001"
-                min="0"
+                step="0.0001"
+                min="0.0001"
                 value={feeAmount}
                 onChange={(e) => setFeeAmount(e.target.value)}
-                placeholder="0.001"
+                placeholder="0.001 (minimum 0.0001)"
                 className="rounded-lg border border-cyan-400/40 bg-midnight/60 px-4 py-3 text-text-light outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60"
               />
               <p className="text-xs text-text-light/60">
-                💡 Alıcı bu ücreti ödeyerek mesajı anında açabilir
+                💡 Alıcı bu ücreti ödeyerek mesajı anında açabilir (min: 0.0001)
               </p>
             </div>
             
             <div className="rounded-lg bg-cyan-500/10 border border-cyan-400/30 p-3 text-xs text-cyan-300">
               <p>⚡ <strong>Instant Unlock:</strong> Ücret ödendiğinde mesaj hemen açılır</p>
               <p className="mt-1">🔒 <strong>Secure:</strong> Ücret akıllı kontrat tarafından yönetilir</p>
+              <p className="mt-1">💸 <strong>Payment:</strong> Ödeme doğrudan size gönderilir (protokol ücreti %1)</p>
             </div>
           </div>
         )}

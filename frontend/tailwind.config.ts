@@ -4,6 +4,16 @@ const config: Config = {
   content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}", "./pages/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      backdropBlur: {
+        none: '0',
+        sm: '0',    // Disable blur for dropdowns
+        DEFAULT: '0',
+        md: '0',
+        lg: '0',
+        xl: '0',
+        '2xl': '0',
+        '3xl': '0',
+      },
       colors: {
         // Tech-Noir Ana Renkler
         midnight: "#0A0A1A",

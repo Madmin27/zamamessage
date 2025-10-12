@@ -8,6 +8,7 @@ import duration from "dayjs/plugin/duration";
 import { usePublicClient, useAccount, useNetwork } from "wagmi";
 import type { PublicClient } from "viem";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
+import { chronoMessageV3_2Abi } from "../lib/abi-v3.2";
 import { appConfig } from "../lib/env";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 import { MessageCard } from "./MessageCard";
@@ -32,6 +33,15 @@ interface MessageViewModel {
   content: string | null;
   isRead: boolean;
   isSent: boolean;
+  timestamp?: bigint; // Mesajın gönderilme zamanı
+  transactionHash?: string; // İşlem hash'i (mesaj gönderilirken)
+  // V3 ödeme bilgileri
+  requiredPayment?: bigint;
+  paidAmount?: bigint;
+  conditionType?: number; // 0: TIME_LOCK, 1: PAYMENT
+  paymentTxHash?: string; // Ödeme yapıldığında transaction hash
+  // Dosya desteği
+  contentType?: number; // 0: TEXT, 1: IPFS_HASH, 2: ENCRYPTED
 }
 
 interface Toast {
@@ -43,21 +53,67 @@ interface Toast {
 async function fetchMessage(
   client: PublicClient,
   contractAddress: `0x${string}`,
+  contractAbi: any, // Type union çok karmaşık, any kullan
   id: bigint,
   userAddress: string,
-  account?: `0x${string}`
+  account?: `0x${string}`,
+  isV3?: boolean // V3 contract mu?
 ): Promise<MessageViewModel | null> {
   try {
-    const [sender, receiver, unlockTime, isRead] = (await client.readContract({
+    const result = await client.readContract({
       address: contractAddress,
-      abi: chronoMessageV2Abi,
+      abi: contractAbi,
       functionName: "getMessageMetadata",
       args: [id],
       account: account // Kullanıcı adresini msg.sender olarak gönder
-    })) as [string, string, bigint, boolean];
+    });
+
+    let sender: string, receiver: string, unlockTime: bigint, isRead: boolean;
+    let requiredPayment: bigint | undefined;
+    let paidAmount: bigint | undefined;
+    let conditionType: number | undefined;
+    let timestamp: bigint | undefined;
+    let contentType: number | undefined;
+
+    if (isV3) {
+      // V3: Tuple (struct) olarak döner
+      const metadata = result as any;
+      sender = metadata.sender ?? metadata[0];
+      receiver = metadata.receiver ?? metadata[1];
+      unlockTime = metadata.unlockTime ?? metadata[2] ?? 0n; // 0n fallback
+      requiredPayment = metadata.requiredPayment ?? metadata[3];
+      paidAmount = metadata.paidAmount ?? metadata[4];
+      conditionType = metadata.conditionType !== undefined ? metadata.conditionType : metadata[5];
+      contentType = metadata.contentType !== undefined ? metadata.contentType : metadata[6]; // 6. index
+      isRead = metadata.isRead ?? metadata[7]; // 7. index
+      timestamp = metadata.timestamp ?? metadata[8]; // timestamp son alan (index 8)
+      console.log('📦 V3 metadata:', metadata);
+    } else {
+      // V2: Array olarak döner
+      contentType = undefined; // V2'de contentType yok
+      [sender, receiver, unlockTime, isRead] = result as [string, string, bigint, boolean];
+      timestamp = undefined; // V2'de timestamp yok
+      console.log('📦 V2 metadata:', [sender, receiver, unlockTime, isRead]);
+    }
 
     const now = BigInt(Math.floor(Date.now() / 1000));
-    const unlocked = now >= unlockTime;
+    
+    // Unlock kontrolü: V3'te condition type'a göre
+    let unlocked = false;
+    if (isV3 && conditionType !== undefined) {
+      // V3: conditionType var
+      if (conditionType === 0) {
+        // TIME_LOCK (0)
+        unlocked = now >= unlockTime;
+      } else if (conditionType === 1) {
+        // PAYMENT (1)
+        unlocked = (paidAmount ?? 0n) >= (requiredPayment ?? 0n);
+      }
+    } else {
+      // V2: sadece time-based
+      unlocked = now >= unlockTime;
+    }
+    
     const isSent = sender.toLowerCase() === userAddress.toLowerCase();
 
     let content: string | null = null;
@@ -65,18 +121,32 @@ async function fetchMessage(
       content = "[Click to read message]";
     }
 
-    const unlockDate = dayjs(Number(unlockTime) * 1000);
+    // Payment mesajları için tarih formatlaması özel (unlockTime=0)
+    const isPaymentLocked = isV3 && conditionType === 1; // PAYMENT mode
+    const unlockDate = isPaymentLocked 
+      ? dayjs() // Payment mesajlar için şu anki zamanı göster (anlamsız zaten)
+      : dayjs(Number(unlockTime) * 1000);
+    
+    const relative = isPaymentLocked
+      ? (unlocked ? "Payment received" : "Waiting for payment")
+      : (unlocked ? "Açıldı" : unlockDate.fromNow());
+    
     return {
       id,
       sender,
       receiver,
       unlockTime,
-      unlockDate: unlockDate.format("DD MMM YYYY HH:mm"),
-      relative: unlocked ? "Açıldı" : unlockDate.fromNow(),
+      unlockDate: isPaymentLocked ? "Payment-locked" : unlockDate.format("DD MMM YYYY HH:mm"),
+      relative,
       unlocked,
       content,
       isRead,
-      isSent
+      isSent,
+      timestamp, // Mesajın gönderilme zamanı
+      requiredPayment,
+      paidAmount,
+      conditionType,
+      contentType // Dosya tipi
     };
   } catch (err: any) {
     // Authorization hatası durumunda null dön (bu mesaj kullanıcıya ait değil)
@@ -85,8 +155,124 @@ async function fetchMessage(
       return null;
     }
     // Diğer hatalar için throw et
+    console.error(`❌ fetchMessage error for #${id}:`, err);
     throw err;
   }
+}
+
+// Transaction hash'lerini event log'larından çek
+async function fetchTransactionHashes(
+  client: PublicClient,
+  contractAddress: `0x${string}`,
+  contractAbi: any,
+  messageIds: bigint[]
+): Promise<Map<string, { sentTxHash?: string; paymentTxHash?: string }>> {
+  const txHashMap = new Map<string, { sentTxHash?: string; paymentTxHash?: string }>();
+  
+  if (messageIds.length === 0) return txHashMap;
+
+  try {
+    // Son bloğu al
+    const latestBlock = await client.getBlockNumber();
+    
+    // Son 10000 bloğu tara (yeni contract için yeterli)
+    // Daha eski mesajlar için gerekirse artırılabilir
+    const LOOKBACK_BLOCKS = 10000n;
+    const startBlock = latestBlock > LOOKBACK_BLOCKS ? latestBlock - LOOKBACK_BLOCKS : 0n;
+    
+    // Block range'i parçalara böl (Scroll Sepolia için max 5000 block)
+    const BLOCK_CHUNK_SIZE = 5000n;
+    const chunks: Array<{ from: bigint; to: bigint }> = [];
+    
+    for (let from = startBlock; from <= latestBlock; from += BLOCK_CHUNK_SIZE) {
+      const to = from + BLOCK_CHUNK_SIZE - 1n > latestBlock 
+        ? latestBlock 
+        : from + BLOCK_CHUNK_SIZE - 1n;
+      chunks.push({ from, to });
+    }
+
+    console.log(`📊 Fetching TX hashes in ${chunks.length} chunks (blocks ${startBlock} to ${latestBlock})`);
+
+    // MessageSent event'lerini chunk chunk çek
+    for (const chunk of chunks) {
+      try {
+        const sentLogs = await client.getLogs({
+          address: contractAddress,
+          event: {
+            type: 'event',
+            name: 'MessageSent',
+            inputs: [
+              { type: 'uint256', name: 'messageId', indexed: true },
+              { type: 'address', name: 'sender', indexed: true },
+              { type: 'address', name: 'receiver', indexed: true },
+            ]
+          },
+          fromBlock: chunk.from,
+          toBlock: chunk.to
+        });
+
+        // MessageSent event'lerinden transaction hash'leri çıkar
+        sentLogs.forEach((log: any) => {
+          const messageId = log.args?.messageId?.toString();
+          if (messageId && messageIds.some(id => id.toString() === messageId)) {
+            const existing = txHashMap.get(messageId) || {};
+            txHashMap.set(messageId, { 
+              ...existing, 
+              sentTxHash: log.transactionHash 
+            });
+          }
+        });
+        
+        console.log(`✅ Chunk ${chunk.from}-${chunk.to}: Found ${sentLogs.length} MessageSent events`);
+      } catch (chunkErr) {
+        console.warn(`⚠️ Error fetching MessageSent logs for blocks ${chunk.from}-${chunk.to}:`, chunkErr);
+      }
+    }
+
+    // PaymentReceived event'lerini çek (ödeme yapılırken)
+    for (const chunk of chunks) {
+      try {
+        const paymentLogs = await client.getLogs({
+          address: contractAddress,
+          event: {
+            type: 'event',
+            name: 'PaymentReceived',
+            inputs: [
+              { type: 'uint256', name: 'messageId', indexed: true },
+              { type: 'address', name: 'payer', indexed: true },
+              { type: 'uint256', name: 'amount', indexed: false },
+            ]
+          },
+          fromBlock: chunk.from,
+          toBlock: chunk.to
+        });
+
+        paymentLogs.forEach((log: any) => {
+          const messageId = log.args?.messageId?.toString();
+          if (messageId && messageIds.some(id => id.toString() === messageId)) {
+            const existing = txHashMap.get(messageId) || {};
+            txHashMap.set(messageId, { 
+              ...existing, 
+              paymentTxHash: log.transactionHash 
+            });
+          }
+        });
+        
+        if (paymentLogs.length > 0) {
+          console.log(`✅ Chunk ${chunk.from}-${chunk.to}: Found ${paymentLogs.length} PaymentReceived events`);
+        }
+      } catch (chunkErr) {
+        // PaymentReceived event yoksa veya hata varsa (sessiz geç)
+      }
+    }
+    
+    console.log(`✅ Total TX hashes found: ${txHashMap.size}`);
+
+  } catch (err) {
+    console.error('❌ fetchTransactionHashes error:', err);
+  }
+
+  return txHashMap;
 }
 
 export function MessageList({ refreshKey }: MessageListProps) {
@@ -96,6 +282,14 @@ export function MessageList({ refreshKey }: MessageListProps) {
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
   const { getSelectedVersion } = useVersioning();
+  const activeVersion = getSelectedVersion(chain?.id);
+  
+  // V3.2 contract mu kontrol et
+  const isV3_2Contract = activeVersion?.key === 'v3.2';
+  
+  // ABI seçimi: v3.2 veya v2
+  const contractAbi = isV3_2Contract ? chronoMessageV3_2Abi : chronoMessageV2Abi;
+  
   const [items, setItems] = useState<MessageViewModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,22 +321,53 @@ export function MessageList({ refreshKey }: MessageListProps) {
 
     try {
       // Kullanıcının gönderdiği ve aldığı mesaj ID'lerini al
-      const sentIds = (await client.readContract({
-        address: contractAddress,
-        abi: chronoMessageV2Abi,
-        functionName: "getSentMessages",
-        args: [userAddress as `0x${string}`]
-      })) as bigint[];
+      console.log('📡 Fetching messages with ABI:', isV3_2Contract ? 'SealedMessage v3.2' : 'SealedMessage v2');
+      
+      let sentIds: any = [];
+      let receivedIds: any = [];
+      
+      try {
+        const result = await client.readContract({
+          address: contractAddress,
+          abi: contractAbi as any,
+          functionName: "getSentMessages",
+          args: [userAddress as `0x${string}`]
+        });
+        sentIds = result;
+        console.log('✅ getSentMessages raw result:', result);
+      } catch (err) {
+        console.error('❌ getSentMessages error:', err);
+        sentIds = [];
+      }
 
-      const receivedIds = (await client.readContract({
-        address: contractAddress,
-        abi: chronoMessageV2Abi,
-        functionName: "getReceivedMessages",
-        args: [userAddress as `0x${string}`]
-      })) as bigint[];
+      try {
+        const result = await client.readContract({
+          address: contractAddress,
+          abi: contractAbi as any,
+          functionName: "getReceivedMessages",
+          args: [userAddress as `0x${string}`]
+        });
+        receivedIds = result;
+        console.log('✅ getReceivedMessages raw result:', result);
+      } catch (err) {
+        console.error('❌ getReceivedMessages error:', err);
+        receivedIds = [];
+      }
 
-      // Tüm mesaj ID'lerini birleştir ve tekrar edenleri çıkar
-      const allIds = [...new Set([...sentIds, ...receivedIds])];
+      // Array validation BEFORE any spread operations
+      if (!sentIds || !Array.isArray(sentIds)) {
+        console.warn('⚠️ sentIds is not an array:', sentIds);
+        sentIds = [];
+      }
+      if (!receivedIds || !Array.isArray(receivedIds)) {
+        console.warn('⚠️ receivedIds is not an array:', receivedIds);
+        receivedIds = [];
+      }
+
+      console.log('📦 Validated arrays - Sent:', sentIds.length, 'Received:', receivedIds.length);
+
+      // NOW safe to spread
+      const allIds = [...new Set([...(sentIds as bigint[]), ...(receivedIds as bigint[])])];
 
       if (allIds.length === 0) {
         setItems([]);
@@ -151,20 +376,69 @@ export function MessageList({ refreshKey }: MessageListProps) {
         return;
       }
 
-      // Mesajları yükle - userAddress'i account parametresi olarak geç
+      // Mesajları yükle - userAddress'i account parametresi olarak geç + isV3 flag
       const results = await Promise.all(
-        allIds.map((id) => fetchMessage(client, contractAddress, id, userAddress, userAddress as `0x${string}`))
+        allIds.map((id) => fetchMessage(
+          client, 
+          contractAddress, 
+          contractAbi, 
+          id, 
+          userAddress, 
+          userAddress as `0x${string}`,
+          isV3_2Contract // V3.2 contract mu?
+        ))
       );
       
       // Null değerleri filtrele (yetki hatası olanlar)
       const validMessages = results.filter((msg): msg is MessageViewModel => msg !== null);
       
-      // Tarihe göre sırala (en yeni önce)
-      validMessages.sort((a, b) => Number(b.unlockTime - a.unlockTime));
+      // Transaction hash'lerini çek
+      const txHashMap = await fetchTransactionHashes(
+        client,
+        contractAddress,
+        contractAbi,
+        allIds
+      );
+      
+      // Transaction hash'lerini mesajlara ekle
+      validMessages.forEach(msg => {
+        const txData = txHashMap.get(msg.id.toString());
+        if (txData) {
+          msg.transactionHash = txData.sentTxHash;
+          msg.paymentTxHash = txData.paymentTxHash;
+        }
+      });
+      
+      // Tarihe göre sırala (EN YENİ ÖNCE - descending order)
+      // Payment mesajları (unlockTime=0) için özel davranış: message ID'ye göre sırala (ID büyük = yeni)
+      validMessages.sort((a, b) => {
+        // Payment mesajları (conditionType=1, unlockTime=0) için özel mantık
+        const aIsPayment = a.conditionType === 1 || (a.unlockTime === 0n && a.timestamp === undefined);
+        const bIsPayment = b.conditionType === 1 || (b.unlockTime === 0n && b.timestamp === undefined);
+        
+        // Her iki mesaj da payment ise: ID'ye göre sırala (ID büyük = yeni mesaj)
+        if (aIsPayment && bIsPayment) {
+          return Number(b.id) - Number(a.id);
+        }
+        
+        // Payment mesajlar her zaman en üstte (öncelikli)
+        if (aIsPayment) return -1; // a önce gelsin
+        if (bIsPayment) return 1;  // b önce gelsin
+        
+        // Normal mesajlar için: timestamp veya unlockTime'a göre
+        const aTime = a.timestamp ?? a.unlockTime ?? 0n;
+        const bTime = b.timestamp ?? b.unlockTime ?? 0n;
+        
+        return Number(bTime) - Number(aTime); // Büyükten küçüğe (yeni → eski)
+      });
       
       // Yeni unlock olan mesajları kontrol et (SADECE henüz okunmamış olanlar)
       const newlyUnlocked = validMessages.filter(msg => 
-        msg.unlocked && !msg.isSent && !msg.isRead && !unlockedMessageIds.has(msg.id.toString())
+        msg.id && // id undefined değilse
+        msg.unlocked && 
+        !msg.isSent && 
+        !msg.isRead && 
+        !unlockedMessageIds.has(msg.id.toString())
       );
       
       if (newlyUnlocked.length > 0) {
@@ -239,8 +513,6 @@ export function MessageList({ refreshKey }: MessageListProps) {
     );
   }
 
-  const activeVersion = getSelectedVersion(chain?.id);
-
   return (
     <section className="space-y-4">
       {/* Toast Notifications */}
@@ -250,7 +522,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
             key={toast.id}
             className={`
               animate-in slide-in-from-right duration-300
-              rounded-lg border px-4 py-3 shadow-lg backdrop-blur-sm
+              rounded-lg border px-4 py-3 shadow-lg
               ${toast.type === 'success' ? 'border-green-500/50 bg-green-900/80 text-green-100' : ''}
               ${toast.type === 'info' ? 'border-blue-500/50 bg-blue-900/80 text-blue-100' : ''}
               ${toast.type === 'warning' ? 'border-yellow-500/50 bg-yellow-900/80 text-yellow-100' : ''}
@@ -302,21 +574,34 @@ export function MessageList({ refreshKey }: MessageListProps) {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {items.map((item, index) => (
-            <MessageCard
-              key={`msg-${item.id.toString()}-${item.unlockTime.toString()}-${item.isSent ? 's' : 'r'}-${index}`}
-              id={item.id}
-              sender={item.sender}
-              receiver={item.receiver}
-              unlockTime={item.unlockTime}
-              unlockDate={item.unlockDate}
-              unlocked={item.unlocked}
-              isRead={item.isRead}
-              isSent={item.isSent}
-              index={index}
-              // onMessageRead kaldırıldı - mesaj okununca sayfayı yenilemesin
-            />
-          ))}
+          {items.map((item, index) => {
+            // Safeguard: undefined değerleri kontrol et (0n geçerli!)
+            if (item.id === undefined || item.unlockTime === undefined) {
+              console.warn('⚠️ Invalid message item:', item);
+              return null;
+            }
+            return (
+              <MessageCard
+                key={`msg-${item.id.toString()}-${item.unlockTime.toString()}-${item.isSent ? 's' : 'r'}-${index}`}
+                id={item.id}
+                sender={item.sender}
+                receiver={item.receiver}
+                unlockTime={item.unlockTime}
+                unlockDate={item.unlockDate}
+                unlocked={item.unlocked}
+                isRead={item.isRead}
+                isSent={item.isSent}
+                index={index}
+                requiredPayment={item.requiredPayment}
+                paidAmount={item.paidAmount}
+                conditionType={item.conditionType}
+                transactionHash={item.transactionHash}
+                paymentTxHash={item.paymentTxHash}
+                contentType={item.contentType}
+                // onMessageRead kaldırıldı - mesaj okununca sayfayı yenilemesin
+              />
+            );
+          })}
         </div>
       )}
     </section>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { WalletButton } from "../components/WalletButton";
 import { MessageForm } from "../components/MessageForm";
 import { MessageList } from "../components/MessageList";
 import { NetworkSwitcher } from "../components/NetworkSwitcher";
@@ -19,7 +19,7 @@ export default function HomePage() {
 
   return (
     <main className="flex flex-1 flex-col gap-6">
-      <header className="flex flex-col gap-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue backdrop-blur-sm">
+      <header className="flex flex-col gap-4 rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 shadow-glow-blue overflow-visible">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-cyber-blue">SealedMessage</h1>
@@ -27,12 +27,12 @@ export default function HomePage() {
               When conditions intersect, the seal breaks.
             </p>
           </div>
-          <div className="flex flex-col gap-3 md:items-end">
-            <ConnectButton showBalance={false} label="Connect Wallet" accountStatus="address" chainStatus="none" />
-            <div className="w-full md:w-80">
+          <div className="flex flex-col gap-3 md:items-end overflow-visible">
+            <WalletButton />
+            <div className="w-full md:w-80 overflow-visible">
               <NetworkSwitcher />
             </div>
-            <div className="w-full md:w-80">
+            <div className="w-full md:w-80 overflow-visible">
               <VersionSwitcher />
             </div>
           </div>
@@ -41,7 +41,7 @@ export default function HomePage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1fr_1fr]">
   <MessageForm onSubmitted={handleMessageSubmitted} />
-        <div className="rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 text-sm text-text-light/80 shadow-glow-blue backdrop-blur-sm">
+        <div className="rounded-xl border border-cyber-blue/30 bg-midnight/80 p-6 text-sm text-text-light/80 shadow-glow-blue">
           <h2 className="text-lg font-semibold text-cyber-blue">📌 How It Works?</h2>
           <ol className="mt-4 space-y-2 list-decimal pl-4">
             <li>Select the unlock date as a future time.</li>

@@ -24,6 +24,11 @@ export function NetworkSwitcher() {
     setMounted(true);
   }, []);
 
+  // Debug: isOpen state değişimini logla
+  useEffect(() => {
+    console.log('🟡 NetworkSwitcher isOpen changed:', isOpen);
+  }, [isOpen]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -37,11 +42,14 @@ export function NetworkSwitcher() {
   }, []);
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative z-50" ref={dropdownRef}>
       {/* Compact Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 shadow-lg backdrop-blur transition hover:border-aurora hover:bg-slate-900/80"
+        onClick={() => {
+          console.log('🔵 NetworkSwitcher button clicked! isOpen:', !isOpen);
+          setIsOpen(!isOpen);
+        }}
+        className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 shadow-lg transition hover:border-aurora hover:bg-slate-900/80"
       >
         <div className="flex items-center gap-3">
           <span className="text-2xl">🌐</span>
@@ -66,11 +74,14 @@ export function NetworkSwitcher() {
         </svg>
       </button>
 
-      {/* Dropdown Panel */}
-      {isOpen && (
-        <div className="absolute left-0 right-0 z-50 mt-2 max-h-[500px] overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+      {/* Dropdown Panel - Only render after mount to prevent hydration mismatch */}
+      {mounted && isOpen && (
+        <div 
+          className="absolute left-0 right-0 z-[100] mt-2 max-h-[500px] overflow-y-auto rounded-xl border-2 border-aurora bg-slate-900 shadow-2xl"
+          style={{ minHeight: '200px' }}
+        >
           {/* Header */}
-          <div className="sticky top-0 border-b border-slate-700 bg-slate-900 px-4 py-3">
+          <div className="sticky top-0 border-b border-slate-700 bg-slate-900 px-4 py-3 z-10">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-aurora">Network Selection</h3>
               <button

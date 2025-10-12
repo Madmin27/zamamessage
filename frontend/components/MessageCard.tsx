@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useContractWrite, useWaitForTransaction, usePublicClient, useAccount } from "wagmi";
+import { useContractWrite, useWaitForTransaction, usePublicClient, useAccount, usePrepareContractWrite } from "wagmi";
 import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
 import { chronoMessageV2Abi } from "../lib/abi-v2";
+import { chronoMessageV3_2Abi } from "../lib/abi-v3.2";
 import { appConfig } from "../lib/env";
 import { useContractAddress } from "../lib/useContractAddress";
+import { useVersioning } from "./VersionProvider";
+import { useNetwork } from "wagmi";
 
 dayjs.extend(duration);
 
@@ -21,6 +24,15 @@ interface MessageCardProps {
   isSent: boolean;
   index: number;
   onMessageRead?: () => void;
+  // V3 ödeme bilgileri
+  requiredPayment?: bigint;
+  paidAmount?: bigint;
+  conditionType?: number;
+  // Transaction hash'leri
+  transactionHash?: string;
+  paymentTxHash?: string;
+  // Dosya desteği
+  contentType?: number; // 0=TEXT, 1=IPFS_HASH, 2=ENCRYPTED
 }
 
 export function MessageCard({
@@ -33,7 +45,13 @@ export function MessageCard({
   isRead,
   isSent,
   index,
-  onMessageRead
+  onMessageRead,
+  requiredPayment,
+  paidAmount,
+  conditionType,
+  transactionHash,
+  paymentTxHash,
+  contentType
 }: MessageCardProps) {
   const [messageContent, setMessageContent] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -41,6 +59,36 @@ export function MessageCard({
   const client = usePublicClient();
   const { address: userAddress } = useAccount();
   const contractAddress = useContractAddress();
+  const { chain } = useNetwork();
+  const { getSelectedVersion } = useVersioning();
+  const activeVersion = getSelectedVersion(chain?.id);
+  const isV3_2Contract = activeVersion?.key === 'v3.2';
+  
+  // V3.2 Payment unlock için prepare
+  const isPaymentLocked = conditionType === 1 && requiredPayment && requiredPayment > 0n;
+  const canUnlockWithPayment = Boolean(isPaymentLocked && !isSent && !unlocked);
+  
+  const { config: paymentConfig } = usePrepareContractWrite({
+    address: contractAddress,
+    abi: chronoMessageV3_2Abi,
+    functionName: "payToUnlock",
+    args: canUnlockWithPayment ? [id] : undefined,
+    value: canUnlockWithPayment ? requiredPayment : undefined,
+    enabled: canUnlockWithPayment
+  });
+  
+  const { 
+    data: paymentTxData, 
+    isLoading: isPaymentPending, 
+    write: unlockWithPayment 
+  } = useContractWrite(paymentConfig);
+  
+  const { 
+    isLoading: isPaymentConfirming, 
+    isSuccess: isPaymentSuccess 
+  } = useWaitForTransaction({
+    hash: paymentTxData?.hash
+  });
 
   // Eğer mesaj zaten okunmuşsa (isRead: true), direkt içeriği yükle
   useEffect(() => {
@@ -116,14 +164,58 @@ export function MessageCard({
     fetchContent();
   }, [isSuccess, client, id, onMessageRead, userAddress, contractAddress]);
 
+  // Payment success olduğunda içeriği yükle
+  useEffect(() => {
+    const fetchContentAfterPayment = async () => {
+      if (!isPaymentSuccess || !client || !userAddress || !contractAddress) return;
+      
+      setIsLoadingContent(true);
+      
+      // Transaction confirm olduktan sonra biraz bekle
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      try {
+        const content = await client.readContract({
+          address: contractAddress,
+          abi: chronoMessageV3_2Abi,
+          functionName: "getMessageContent",
+          args: [id],
+          account: userAddress as `0x${string}`
+        }) as string;
+
+        setMessageContent(content);
+        setIsExpanded(true);
+        onMessageRead?.();
+      } catch (err: any) {
+        console.error("❌ Content could not be fetched after payment:", err);
+        setMessageContent("⚠️ Content could not be loaded. Please refresh the page.");
+      } finally {
+        setIsLoadingContent(false);
+      }
+    };
+
+    fetchContentAfterPayment();
+  }, [isPaymentSuccess, client, id, onMessageRead, userAddress, contractAddress]);
+
   const handleReadClick = () => {
-    if (!unlocked) return;
-    if (isSent) return;
+    if (!unlocked) {
+      console.warn("❌ Message not unlocked yet");
+      return;
+    }
+    if (isSent) {
+      console.warn("❌ Cannot read own message");
+      return;
+    }
     if (!contractAddress) {
       console.error("❌ Contract address not available");
       return;
     }
-    readMessage?.();
+    if (!readMessage) {
+      console.error("❌ readMessage function not available");
+      return;
+    }
+    console.log("✅ Reading message...");
+    readMessage();
   };
 
   // Countdown Timer
@@ -180,8 +272,23 @@ export function MessageCard({
       `}
     >
       <div className="space-y-3">
+        {/* Başlık: Mesaj ID ve Koşul Tipi */}
         <div className="flex items-center justify-between">
-          <div className="text-xs font-mono text-slate-400">#{id.toString()}</div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-mono text-slate-400">#{id.toString()}</div>
+            {/* Koşul Tipi Badge */}
+            {conditionType !== undefined && (
+              <div className={`
+                px-2 py-0.5 rounded text-xs font-semibold
+                ${conditionType === 0 
+                  ? 'bg-neon-green/20 text-neon-green border border-neon-green/30' 
+                  : 'bg-cyan-500/20 text-cyan-400 border border-cyan-400/30'
+                }
+              `}>
+                {conditionType === 0 ? '⏰ TIME' : '💰 PAYMENT'}
+              </div>
+            )}
+          </div>
           {!isSent && (
             <div className={`
               px-2 py-1 rounded-full text-xs font-semibold
@@ -219,6 +326,106 @@ export function MessageCard({
             <div className="flex items-center justify-between text-sm mt-2">
               <span className="text-slate-400">Kalan:</span>
               <CountdownTimer />
+            </div>
+          )}
+          
+          {/* Ekli Dosya Göstergesi - Mesaj açılmadan önce */}
+          {contentType === 1 && !unlocked && !isSent && (
+            <div className="mt-3 pt-3 border-t border-purple-400/30">
+              <p className="text-sm text-purple-300 flex items-center gap-2">
+                <span>📎</span> Ekli dosya var
+              </p>
+            </div>
+          )}
+          
+          {/* V3 Ödeme Bilgisi */}
+          {requiredPayment && requiredPayment > 0n && (
+            <div className="mt-3 pt-3 border-t border-cyan-400/30">
+              <p className="text-sm font-semibold text-cyan-400 mb-2">💰 Payment Condition</p>
+              
+              {/* Alıcı için ödeme talimatı */}
+              {!isSent && !unlocked && (
+                <div className="mb-3 p-3 rounded-lg bg-cyan-500/10 border border-cyan-400/40 space-y-2">
+                  <p className="text-sm text-cyan-200">
+                    📤 To unlock this message, send{' '}
+                    <span className="font-mono text-yellow-400 font-bold">{(Number(requiredPayment) / 1e18).toFixed(4)} ETH</span>{' '}
+                    to the following address:
+                  </p>
+                  <div className="pt-2 border-t border-cyan-400/30">
+                    <p className="text-xs text-cyan-300 mb-1">Sender</p>
+                    <p className="font-mono text-cyan-100 text-sm bg-midnight/60 px-3 py-2 rounded border border-cyan-400/30 break-all">
+                      {sender}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">Gerekli Ödeme:</span>
+                <span className="font-mono text-yellow-400 font-semibold">
+                  {(Number(requiredPayment) / 1e18).toFixed(4)} ETH
+                </span>
+              </div>
+              {paidAmount !== undefined && paidAmount > 0n && (
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-slate-400">✅ Ödenen:</span>
+                  <span className="font-mono text-green-400 font-semibold">
+                    {(Number(paidAmount) / 1e18).toFixed(4)} ETH
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Unlock Condition Type */}
+          {conditionType !== undefined && (
+            <div className="mt-3 pt-3 border-t border-slate-700/50">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Unlock Type:</span>
+                <span className={`font-semibold ${
+                  conditionType === 0 ? 'text-neon-green' : 'text-cyan-400'
+                }`}>
+                  {conditionType === 0 ? '⏰ Time-Locked' :
+                   conditionType === 1 ? '💰 Payment-Locked' :
+                   '🔀 Hybrid (Deprecated)'}
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Transaction Hash - Mesaj gönderimi */}
+          {transactionHash && (
+            <div className="mt-3 pt-3 border-t border-slate-700/50">
+              <div className="flex items-start gap-2 text-xs">
+                <span className="text-slate-500 shrink-0">📝 Sent TX:</span>
+                <a 
+                  href={`${chain?.blockExplorers?.default?.url || 'https://sepolia.etherscan.io'}/tx/${transactionHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-blue-400 hover:text-blue-300 underline break-all"
+                  title={transactionHash}
+                >
+                  {transactionHash.slice(0, 10)}...{transactionHash.slice(-8)}
+                </a>
+              </div>
+            </div>
+          )}
+          
+          {/* Payment Transaction Hash - Ödeme yapıldıysa */}
+          {paymentTxHash && (
+            <div className="mt-2 pt-2 border-t border-slate-700/50">
+              <div className="flex items-start gap-2 text-xs">
+                <span className="text-slate-500 shrink-0">💰 Payment TX:</span>
+                <a 
+                  href={`${chain?.blockExplorers?.default?.url || 'https://sepolia.etherscan.io'}/tx/${paymentTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-green-400 hover:text-green-300 underline break-all"
+                  title={paymentTxHash}
+                >
+                  {paymentTxHash.slice(0, 10)}...{paymentTxHash.slice(-8)}
+                </a>
+              </div>
             </div>
           )}
         </div>
@@ -265,7 +472,76 @@ export function MessageCard({
             ) : messageContent ? (
               // İçerik yüklenmiş, göster
               <div className="space-y-2">
-                <p className="text-slate-200 whitespace-pre-wrap">{messageContent}</p>
+                {contentType === 1 ? (
+                  // IPFS dosya - IPFS hash
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-slate-300">
+                      <span>📎</span>
+                      <span className="font-semibold">Attached File (IPFS)</span>
+                    </div>
+                    
+                    {/* Dosya önizlemesi */}
+                    {messageContent.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) && (
+                      <div className="rounded-lg overflow-hidden border border-slate-700">
+                        <img 
+                          src={`https://gateway.pinata.cloud/ipfs/${messageContent}`}
+                          alt="Attached" 
+                          className="w-full max-h-96 object-contain bg-slate-900"
+                          onError={(e) => {
+                            // Fallback gateway
+                            const target = e.target as HTMLImageElement;
+                            if (!target.src.includes('ipfs.io')) {
+                              target.src = `https://ipfs.io/ipfs/${messageContent}`;
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {messageContent.match(/\.(mp4|webm)$/i) && (
+                      <div className="rounded-lg overflow-hidden border border-slate-700">
+                        <video 
+                          controls 
+                          className="w-full max-h-96 bg-slate-900"
+                          src={`https://gateway.pinata.cloud/ipfs/${messageContent}`}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* IPFS hash ve download */}
+                    <div className="flex flex-col gap-2 rounded-lg bg-slate-900/50 border border-slate-700 p-3">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500">IPFS Hash:</span>
+                        <code className="font-mono text-cyan-400 break-all">
+                          {messageContent}
+                        </code>
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={`https://gateway.pinata.cloud/ipfs/${messageContent}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-center px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 
+                            border border-blue-500/40 text-blue-300 transition text-sm font-medium"
+                        >
+                          🔗 Open in Pinata
+                        </a>
+                        <a
+                          href={`https://ipfs.io/ipfs/${messageContent}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-center px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 
+                            border border-purple-500/40 text-purple-300 transition text-sm font-medium"
+                        >
+                          📥 Download (IPFS.io)
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // TEXT mesaj - normal gösterim
+                  <p className="text-slate-200 whitespace-pre-wrap">{messageContent}</p>
+                )}
                 {isRead && (
                   <p className="text-xs text-green-400 flex items-center gap-1">
                     <span>✓</span> Read
@@ -275,9 +551,35 @@ export function MessageCard({
             ) : null}
           </div>
         ) : (
-          <p className="text-slate-400 italic flex items-center gap-2">
-            <span>⏳</span> Message is still locked
-          </p>
+          // Mesaj henüz unlock olmamış
+          <div className="space-y-2">
+            {canUnlockWithPayment && isV3_2Contract ? (
+              // Payment-locked mesaj için unlock butonu
+              <button
+                onClick={() => unlockWithPayment?.()}
+                disabled={isPaymentPending || isPaymentConfirming || !unlockWithPayment}
+                className="w-full text-left px-4 py-3 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 
+                  border-2 border-cyan-400/50 text-cyan-300 transition-colors
+                  disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+              >
+                {isPaymentPending || isPaymentConfirming ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin">⟳</span> 
+                    {isPaymentPending ? "Confirming payment..." : "Processing..."}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    💰 Pay {requiredPayment ? (Number(requiredPayment) / 1e18).toFixed(4) : '0'} ETH to Unlock
+                  </span>
+                )}
+              </button>
+            ) : (
+              // Time-locked mesaj
+              <p className="text-slate-400 italic flex items-center gap-2">
+                <span>⏳</span> Message is still locked
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
 import { WagmiConfig, createConfig, configureChains } from "wagmi";
 import { jsonRpcProvider } from "wagmi/providers/jsonRpc";
 import { RainbowKitProvider, midnightTheme, connectorsForWallets } from "@rainbow-me/rainbowkit";
@@ -11,6 +11,11 @@ import { supportedChains } from "../lib/chains";
 import { VersionProvider } from "./VersionProvider";
 
 export function Providers({ children }: PropsWithChildren) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   // Convert supportedChains to wagmi chain format
   const chains = Object.values(supportedChains)
     .filter(c => c.testnet) // Only testnets for now
@@ -59,7 +64,7 @@ export function Providers({ children }: PropsWithChildren) {
   ]);
 
   const config = createConfig({
-    autoConnect: true,
+    autoConnect: false, // Disable auto-connect to prevent hydration issues
     connectors,
     publicClient,
     webSocketPublicClient

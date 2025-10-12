@@ -53,7 +53,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <body className="min-h-screen bg-midnight text-slate-100" suppressHydrationWarning>
         <FarcasterProvider>
           <Providers>
-            <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8">
+            <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8 overflow-visible">
               {children}
             </div>
           </Providers>
