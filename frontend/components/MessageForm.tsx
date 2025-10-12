@@ -123,23 +123,48 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Dosya boyutu kontrolü (max 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    // Dosya boyutu kontrolü (max 25MB - güvenlik için düşürüldü)
+    const maxSize = 25 * 1024 * 1024; // 25MB
     if (file.size > maxSize) {
-      setError(`Dosya çok büyük! Maksimum dosya boyutu: 50MB (Seçilen: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      setError(`❌ Dosya çok büyük! Maksimum: 25MB (Seçilen: ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
       return;
     }
     
-    // Desteklenen dosya tipleri
-    const supportedTypes = [
-      'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
-      'application/pdf',
-      'video/mp4', 'video/webm',
-      'application/vnd.android.package-archive' // APK
-    ];
+    // GÜVENLİK: Desteklenen dosya tipleri (beyaz liste)
+    const allowedTypes = {
+      // Resimler
+      'image/png': '.png',
+      'image/jpeg': '.jpg/.jpeg',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+      'image/svg+xml': '.svg',
+      // Dökümanlar
+      'application/pdf': '.pdf',
+      'text/plain': '.txt',
+      // Arşivler (izin verildi)
+      'application/zip': '.zip',
+      'application/x-rar-compressed': '.rar',
+      'application/x-7z-compressed': '.7z',
+      // Video (küçük boyutlar için)
+      'video/mp4': '.mp4',
+      'video/webm': '.webm'
+      // NOT: APK kaldırıldı (güvenlik riski)
+    };
     
-    if (!supportedTypes.includes(file.type)) {
-      setError(`Desteklenmeyen dosya tipi: ${file.type}. Desteklenen: Resim (PNG/JPG/GIF), PDF, Video (MP4/WebM), APK`);
+    // GÜVENLİK: Dosya uzantısı ve MIME type kontrolü
+    const fileExtension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
+    const isTypeAllowed = Object.keys(allowedTypes).includes(file.type);
+    
+    if (!isTypeAllowed) {
+      const allowedFormats = Object.values(allowedTypes).join(', ');
+      setError(`❌ Desteklenmeyen dosya tipi!\n\n✅ İzin verilen formatlar:\n${allowedFormats}\n\n⚠️ Güvenlik nedeniyle sadece bu formatlar kabul edilir.`);
+      return;
+    }
+    
+    // Uzantı doğrulaması (MIME type spoofing önlemi)
+    const expectedExt = allowedTypes[file.type as keyof typeof allowedTypes];
+    if (expectedExt && !expectedExt.split('/').some(ext => fileExtension === ext)) {
+      setError(`⚠️ Dosya uzantısı (${fileExtension}) dosya tipi ile uyuşmuyor! Olası güvenlik riski.`);
       return;
     }
     
@@ -191,7 +216,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       console.log("✅ Uploaded to IPFS:", hash);
       setIpfsHash(hash);
       setContentType(1); // IPFS_HASH
-      setContent(hash); // Contract'a hash gönderilecek
+      
+      // Dosya metadata'sını delimiter ile birleştir (smart contract'ta parse edilebilir)
+      // Format: hash|fileName|fileSize|fileType
+      const metadata = `${hash}|${file.name}|${file.size}|${file.type}`;
+      setContent(metadata); // Contract'a bu string gönderilecek
       
     } catch (err) {
       console.error("❌ IPFS upload error:", err);
@@ -506,7 +535,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,application/pdf,video/mp4,video/webm,application/vnd.android.package-archive"
+            accept="image/*,application/pdf,text/plain,application/zip,application/x-rar-compressed,application/x-7z-compressed,video/mp4,video/webm"
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -612,7 +641,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             }}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "preset"
-                ? "bg-aurora/20 border-2 border-aurora text-aurora "
+                ? "bg-aurora/20 border-2 border-aurora text-aurora"
                 : "bg-midnight/40 border border-cyber-blue/30 text-text-light/60 hover:text-text-light"
             }`}
           >

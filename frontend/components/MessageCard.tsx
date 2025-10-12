@@ -33,6 +33,11 @@ interface MessageCardProps {
   paymentTxHash?: string;
   // Dosya desteği
   contentType?: number; // 0=TEXT, 1=IPFS_HASH, 2=ENCRYPTED
+  fileMetadata?: {
+    name: string;
+    size: number;
+    type: string;
+  };
 }
 
 export function MessageCard({
@@ -51,7 +56,8 @@ export function MessageCard({
   conditionType,
   transactionHash,
   paymentTxHash,
-  contentType
+  contentType,
+  fileMetadata
 }: MessageCardProps) {
   const [messageContent, setMessageContent] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -332,9 +338,32 @@ export function MessageCard({
           {/* Ekli Dosya Göstergesi - Mesaj açılmadan önce */}
           {contentType === 1 && !unlocked && !isSent && (
             <div className="mt-3 pt-3 border-t border-purple-400/30">
-              <p className="text-sm text-purple-300 flex items-center gap-2">
-                <span>📎</span> Ekli dosya var
-              </p>
+              <div className="rounded-lg bg-purple-900/20 border border-purple-400/40 p-3 space-y-2">
+                <p className="text-sm font-semibold text-purple-300 flex items-center gap-2">
+                  <span>📎</span> Ekli Dosya
+                </p>
+                {fileMetadata && (
+                  <div className="space-y-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-purple-400/70">Dosya adı:</span>
+                      <span className="font-mono text-purple-200 break-all">{fileMetadata.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-purple-400/70">Boyut:</span>
+                      <span className="text-purple-200">{(fileMetadata.size / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-purple-400/70">Tip:</span>
+                      <span className="text-purple-200">{fileMetadata.type}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-purple-400/20">
+                  <p className="text-xs text-purple-300/70 italic">
+                    ⚠️ Dosyayı açmadan önce göndereni doğrulayın
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           
@@ -473,71 +502,98 @@ export function MessageCard({
               // İçerik yüklenmiş, göster
               <div className="space-y-2">
                 {contentType === 1 ? (
-                  // IPFS dosya - IPFS hash
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-slate-300">
-                      <span>📎</span>
-                      <span className="font-semibold">Attached File (IPFS)</span>
-                    </div>
+                  // IPFS dosya - metadata parse et
+                  (() => {
+                    // Format: hash|fileName|fileSize|fileType
+                    const parts = messageContent.split('|');
+                    const ipfsHash = parts[0] || messageContent;
+                    const fileName = parts[1] || 'unknown';
+                    const fileSize = parts[2] ? parseInt(parts[2]) : 0;
+                    const fileType = parts[3] || 'unknown';
                     
-                    {/* Dosya önizlemesi */}
-                    {messageContent.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) && (
-                      <div className="rounded-lg overflow-hidden border border-slate-700">
-                        <img 
-                          src={`https://gateway.pinata.cloud/ipfs/${messageContent}`}
-                          alt="Attached" 
-                          className="w-full max-h-96 object-contain bg-slate-900"
-                          onError={(e) => {
-                            // Fallback gateway
-                            const target = e.target as HTMLImageElement;
-                            if (!target.src.includes('ipfs.io')) {
-                              target.src = `https://ipfs.io/ipfs/${messageContent}`;
-                            }
-                          }}
-                        />
+                    return (
+                      <div className="space-y-3">
+                        {/* Dosya bilgileri */}
+                        <div className="rounded-lg bg-purple-900/20 border border-purple-400/40 p-3 space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-purple-300">
+                            <span>📎</span>
+                            <span className="font-semibold">Ekli Dosya</span>
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-purple-400/70">Dosya adı:</span>
+                              <span className="font-mono text-purple-200 break-all">{fileName}</span>
+                            </div>
+                            {fileSize > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-purple-400/70">Boyut:</span>
+                                <span className="text-purple-200">{(fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <span className="text-purple-400/70">Tip:</span>
+                              <span className="text-purple-200">{fileType}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Dosya önizlemesi */}
+                        {fileType.startsWith('image/') && (
+                          <div className="rounded-lg overflow-hidden border border-slate-700">
+                            <img 
+                              src={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`}
+                              alt={fileName} 
+                              className="w-full max-h-96 object-contain bg-slate-900"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                if (!target.src.includes('ipfs.io')) {
+                                  target.src = `https://ipfs.io/ipfs/${ipfsHash}`;
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                        
+                        {fileType.startsWith('video/') && (
+                          <div className="rounded-lg overflow-hidden border border-slate-700">
+                            <video 
+                              controls 
+                              className="w-full max-h-96 bg-slate-900"
+                              src={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* IPFS hash ve download */}
+                        <div className="flex flex-col gap-2 rounded-lg bg-slate-900/50 border border-slate-700 p-3">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-slate-500">IPFS Hash:</span>
+                            <code className="font-mono text-cyan-400 break-all">
+                              {ipfsHash}
+                            </code>
+                          </div>
+                          <div className="flex gap-2">
+                            <a
+                              href={`https://gateway.pinata.cloud/ipfs/${ipfsHash}`}
+                              download={fileName}
+                              className="flex-1 text-center px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 
+                                border border-blue-500/40 text-blue-300 transition text-sm font-medium"
+                            >
+                              � İndir (Pinata)
+                            </a>
+                            <a
+                              href={`https://ipfs.io/ipfs/${ipfsHash}`}
+                              download={fileName}
+                              className="flex-1 text-center px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 
+                                border border-purple-500/40 text-purple-300 transition text-sm font-medium"
+                            >
+                              📥 İndir (IPFS.io)
+                            </a>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    
-                    {messageContent.match(/\.(mp4|webm)$/i) && (
-                      <div className="rounded-lg overflow-hidden border border-slate-700">
-                        <video 
-                          controls 
-                          className="w-full max-h-96 bg-slate-900"
-                          src={`https://gateway.pinata.cloud/ipfs/${messageContent}`}
-                        />
-                      </div>
-                    )}
-                    
-                    {/* IPFS hash ve download */}
-                    <div className="flex flex-col gap-2 rounded-lg bg-slate-900/50 border border-slate-700 p-3">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500">IPFS Hash:</span>
-                        <code className="font-mono text-cyan-400 break-all">
-                          {messageContent}
-                        </code>
-                      </div>
-                      <div className="flex gap-2">
-                        <a
-                          href={`https://gateway.pinata.cloud/ipfs/${messageContent}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 text-center px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 
-                            border border-blue-500/40 text-blue-300 transition text-sm font-medium"
-                        >
-                          🔗 Open in Pinata
-                        </a>
-                        <a
-                          href={`https://ipfs.io/ipfs/${messageContent}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 text-center px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 
-                            border border-purple-500/40 text-purple-300 transition text-sm font-medium"
-                        >
-                          📥 Download (IPFS.io)
-                        </a>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()
                 ) : (
                   // TEXT mesaj - normal gösterim
                   <p className="text-slate-200 whitespace-pre-wrap">{messageContent}</p>

@@ -42,6 +42,11 @@ interface MessageViewModel {
   paymentTxHash?: string; // Ödeme yapıldığında transaction hash
   // Dosya desteği
   contentType?: number; // 0: TEXT, 1: IPFS_HASH, 2: ENCRYPTED
+  fileMetadata?: {
+    name: string;
+    size: number;
+    type: string;
+  };
 }
 
 interface Toast {
@@ -131,6 +136,16 @@ async function fetchMessage(
       ? (unlocked ? "Payment received" : "Waiting for payment")
       : (unlocked ? "Açıldı" : unlockDate.fromNow());
     
+    // Dosya metadata parse et (contentType=1 ise)
+    let fileMetadata: { name: string; size: number; type: string } | undefined;
+    if (contentType === 1 && !unlocked) {
+      // Metadata'yı almak için content çekmemiz gerekir
+      // Ama bu sadece unlocked durumda mümkün, bu yüzden daha önce kaydedilmiş metadata lazım
+      // ŞİMDİLİK: Mesaj açılmadan önce tam bilgiyi gösteremeyiz
+      // Alternatif: Smart contract'ta ayrı metadata mapping tutmak
+      fileMetadata = undefined; // TODO: Metadata storage eklenecek
+    }
+    
     return {
       id,
       sender,
@@ -146,7 +161,8 @@ async function fetchMessage(
       requiredPayment,
       paidAmount,
       conditionType,
-      contentType // Dosya tipi
+      contentType, // Dosya tipi
+      fileMetadata // Dosya bilgileri (şimdilik undefined)
     };
   } catch (err: any) {
     // Authorization hatası durumunda null dön (bu mesaj kullanıcıya ait değil)
