@@ -143,16 +143,22 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Encrypt content for Zama
   useEffect(() => {
     const encryptContent = async () => {
-      if (!content || !fheInstance || !contractAddress || !userAddress) {
+      // Mesaj veya IPFS hash olmalı
+      const hasContent = content.trim().length > 0 || ipfsHash.length > 0;
+      
+      if (!hasContent || !fheInstance || !contractAddress || !userAddress) {
         setEncryptedData(null);
         return;
       }
       
       setIsEncrypting(true);
       try {
+        // Şifrelenecek veri: Mesaj varsa mesaj, yoksa IPFS hash
+        const dataToEncrypt = content.trim() || ipfsHash;
+        
         // Convert content to BigInt (first 32 bytes)
         const encoder = new TextEncoder();
-        const contentBytes = encoder.encode(content.slice(0, 32));
+        const contentBytes = encoder.encode(dataToEncrypt.slice(0, 32));
         const paddedBytes = new Uint8Array(32);
         paddedBytes.set(contentBytes);
         
@@ -184,7 +190,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     };
     
     encryptContent();
-  }, [content, fheInstance, contractAddress, userAddress]);
+  }, [content, ipfsHash, fheInstance, contractAddress, userAddress]);
 
   // Check contract type
   const isZamaContract = (activeVersion as any)?.key === 'zama';
@@ -198,7 +204,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       !!receiver &&
       isAddress(receiver) &&
       receiver.toLowerCase() !== userAddress?.toLowerCase() &&
-      content.trim().length > 0;
+      (content.trim().length > 0 || ipfsHash.length > 0); // Mesaj VEYA dosya olmalı
     
     // Zama contract: encrypted data + unlock time
     valid = baseValid && 
@@ -207,7 +213,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       unlockTimestamp > Math.floor(Date.now() / 1000);
     
     setIsFormValid(valid);
-  }, [isConnected, receiver, userAddress, content, unlockTimestamp, encryptedData, isEncrypting]);
+  }, [isConnected, receiver, userAddress, content, ipfsHash, unlockTimestamp, encryptedData, isEncrypting]);
   
   // Dosya yükleme fonksiyonu (IPFS - şu an kullanılmıyor)
   const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -308,10 +314,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       setIpfsHash(hash);
       setContentType(1); // IPFS_HASH
       
-      // Dosya metadata'sını delimiter ile birleştir (smart contract'ta parse edilebilir)
-      // Format: hash|fileName|fileSize|fileType
-      const metadata = `${hash}|${file.name}|${file.size}|${file.type}`;
-      setContent(metadata); // Contract'a bu string gönderilecek
+      // NOT: Mesajı silme! IPFS hash'i ayrı state'te sakla
+      // Kullanıcı hem mesaj hem dosya gönderebilsin
       
     } catch (err) {
       console.error("❌ IPFS upload error:", err);
@@ -677,7 +681,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               <button
                 key={value}
                 type="button"
-                onClick={() => setPresetDuration(value)}
+                onClick={() => {
+                  setPresetDuration(value);
+                  setIsPresetsOpen(false); // Dropdown'ı kapat
+                }}
                 className={`rounded-lg px-3 py-2 text-sm transition ${
                   presetDuration === value
                     ? "bg-neon-orange/20 border-2 border-neon-orange text-neon-orange shadow-glow-orange"
