@@ -2,12 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {FHE, euint256, externalEuint256} from "@fhevm/solidity/lib/FHE.sol";
+import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /// @title ChronoMessageZama - Zama FHE ile şifreli zaman kilitli mesajlaşma
 /// @notice Mesajlar FHE ile şifrelenir ve sadece unlockTime'dan sonra okunabilir
-/// @dev Zama FHEVM - Tüm EVM ağlarında çalışır (Base, Sepolia, Scroll, vb.)
-/// @dev Config-free implementation - Zama kütüphaneleri otomatik ağ yapılandırması yapar
-contract ChronoMessageZama {
+/// @dev Zama FHEVM - Sepolia testnet'te çalışır
+/// @dev SepoliaConfig'den inherit ederek otomatik FHEVM yapılandırması sağlanır
+contract ChronoMessageZama is SepoliaConfig {
     
     struct Message {
         address sender;
@@ -33,21 +34,21 @@ contract ChronoMessageZama {
     
     /// @notice Şifreli mesaj gönder
     /// @param receiver Mesajı alacak adres
-    /// @param encryptedContent FHE ile şifrelenmiş mesaj içeriği (externalEuint256)
+    /// @param encryptedContent FHE ile şifrelenmiş mesaj handle (externalEuint256 - bytes32)
     /// @param inputProof Şifreleme kanıtı
     /// @param unlockTime Mesajın açılabileceği Unix timestamp
     /// @return messageId Oluşturulan mesajın ID'si
     function sendMessage(
         address receiver,
-        bytes calldata encryptedContent,
+        externalEuint256 encryptedContent,
         bytes calldata inputProof,
         uint256 unlockTime
     ) external returns (uint256 messageId) {
         require(receiver != address(0), "Invalid receiver address");
         require(unlockTime > block.timestamp, "Unlock time must be in future");
         
-        // Convert encrypted bytes to euint256
-        euint256 encrypted = FHE.asEuint256(encryptedContent, inputProof);
+        // Convert external encrypted handle to euint256
+        euint256 encrypted = FHE.fromExternal(encryptedContent, inputProof);
         
         messageId = messageCount;
         messageCount++;

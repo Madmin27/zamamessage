@@ -9,6 +9,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { defineChain } from "viem";
 import { supportedChains } from "../lib/chains";
 import { VersionProvider } from "./VersionProvider";
+import { FheProvider } from "./FheProvider";
 
 export function Providers({ children }: PropsWithChildren) {
   const [mounted, setMounted] = useState(false);
@@ -74,9 +75,11 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <WagmiConfig config={config}>
       <RainbowKitProvider chains={chains} theme={midnightTheme()}>
-        <VersionProvider>
-          {children}
-        </VersionProvider>
+        <FheProvider>
+          <VersionProvider>
+            {children}
+          </VersionProvider>
+        </FheProvider>
       </RainbowKitProvider>
     </WagmiConfig>
   );

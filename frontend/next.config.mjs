@@ -6,6 +6,10 @@ const nextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  // Transpile Zama SDK package (EmelMarket pattern)
+  transpilePackages: ['@zama-fhe/relayer-sdk'],
+  // ❌ CORS headers REMOVED - Blocks CDN worker scripts
+  // Zama SDK will be imported from npm package instead
   webpack: (config, { isServer }) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,

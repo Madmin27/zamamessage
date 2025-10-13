@@ -2,8 +2,8 @@
   "network": "sepolia",
   "version": "zama",
   "contractName": "ChronoMessageZama",
-  "address": "0x11CC6fbb9663dA073cF266922F8A5f6dcD797De2",
-  "deployedAt": "2025-10-12T14:33:01.785Z",
+  "address": "0x65016d7E35EC1830d599991d82381bf03eEC2987",
+  "deployedAt": "2025-10-12T20:19:13.263Z",
   "deployedBy": "0xF6D39Dda8997407110264acEc6a24345834cB639",
   "chainId": 11155111,
   "features": [

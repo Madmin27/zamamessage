@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import { Metadata } from "next";
+import Script from "next/script";
 import { Providers } from "../components/Providers";
 import { FarcasterProvider } from "../components/FarcasterProvider";
 
@@ -51,9 +52,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Global polyfill for Zama SDK */}
         <script dangerouslySetInnerHTML={{
           __html: `
-            // Polyfill for Zama SDK (WASM needs global)
             if (typeof global === 'undefined') {
               window.global = window;
             }

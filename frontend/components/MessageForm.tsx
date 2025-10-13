@@ -6,17 +6,12 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
-import { chronoMessageZamaAbi } from "../lib/abi-zama";
+import { confidentialMessageAbi } from "../lib/abi-confidential"; // ✅ NEW: EmelMarket Pattern ABI
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
-// Dynamic import for Zama SDK (browser-only)
-// import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk/web";
-
-// TypeScript interface for FhevmInstance
-interface FhevmInstance {
-  createEncryptedInput: (contractAddress: string, userAddress: string) => any;
-}
+// EMELMARKET PATTERN - Using useFhe hook
+import { useFhe } from "./FheProvider";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -31,6 +26,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const { chain } = useNetwork();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
+  
+  // EMELMARKET PATTERN - Get FHE instance from context
+  const fhe = useFhe();
   
   // Zama FHE only - No version switching needed
   const isZamaContract = true; // Her zaman Zama kullan
@@ -55,9 +53,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Zama FHE state
-  const [fheInstance, setFheInstance] = useState<FhevmInstance | null>(null);
-  const [encryptedData, setEncryptedData] = useState<{ handle: string; inputProof: string } | null>(null);
+  const [fheInstance, setFheInstance] = useState<any>(null);
+  const [encryptedData, setEncryptedData] = useState<{ handles: string[]; inputProof: string } | null>(null);
   const [isEncrypting, setIsEncrypting] = useState(false);
+  const [fheInitialized, setFheInitialized] = useState(false); // Track if FHE was initialized
   
   // Form validation state
   const [isFormValid, setIsFormValid] = useState(false);
@@ -111,137 +110,105 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     }
   }, [unlockMode, presetDuration, unlock, selectedTimezone]);
 
-  // Initialize Zama FHE instance (Sepolia only)
-  useEffect(() => {
-    const initFHE = async () => {
-      console.log("🚀 FHE Init check:", {
-        hasContractAddress: !!contractAddress,
-        contractAddress,
-        chainId: chain?.id,
-        chainName: chain?.name,
-        isZamaContract: true
-      });
-      
-      if (!contractAddress || !chain?.id) {
-        console.log("⚠️ Missing contract or chain");
-        return;
-      }
-      
-      // Always Zama FHE
-      console.log("🔍 Using Zama FHE encryption");
-      
-      // Only Sepolia supported
-      if (chain.id !== 11155111) {
-        console.warn("⚠️ Zama FHE only supports Sepolia (chainId: 11155111), current:", chain.id);
-        setFheInstance(null);
-        return;
-      }
-      
-      try {
-        console.log("🔐 Initializing Zama FHE (Sepolia)...");
-        
-        // Dynamic import for browser-only SDK
-        const { createInstance, SepoliaConfig } = await import("@zama-fhe/relayer-sdk/web");
-        console.log("📦 SDK loaded, creating instance...");
-        const instance = await createInstance(SepoliaConfig);
-        setFheInstance(instance as any);
-        console.log("✅ Zama FHE ready!", instance);
-      } catch (err) {
-        console.error("❌ Zama FHE init error:", err);
-        setFheInstance(null);
-      }
-    };
+  // Lazy FHE Initialization - using proven fhevmjs SDK
+  const initializeFHE = async () => {
+    if (fheInitialized) return; // Already initialized
     
-    initFHE();
-  }, [contractAddress, chain?.id]);
+    console.log("🚀 Lazy FHE Init starting (fhevmjs SDK)...", {
+      hasContractAddress: !!contractAddress,
+      contractAddress,
+      chainId: chain?.id,
+      chainName: chain?.name,
+    });
+    
+    if (!contractAddress || !chain?.id) {
+      throw new Error("Missing contract or chain");
+    }
+    
+    // Only Sepolia supported
+    if (chain.id !== 11155111) {
+      throw new Error(`Zama FHE only supports Sepolia (chainId: 11155111), current: ${chain.id}`);
+    }
+    
+    try {
+      console.log("🔐 Checking FHE SDK from context (EmelMarket pattern)...");
+      
+      // EMELMARKET PATTERN - FHE instance comes from context, not manual init
+      if (!fhe) {
+        console.log("⏳ FHE SDK still loading from FheProvider...");
+        throw new Error("FHE SDK not ready yet");
+      }
+      
+      setFheInstance(fhe);
+      setFheInitialized(true);
+      console.log("✅ FHE SDK ready from context!");
+      
+      return fhe;
+    } catch (err) {
+      console.error("❌ FHE SDK error:", err);
+      throw err;
+    }
+  };
 
-  // Encrypt content for Zama
-  useEffect(() => {
-    const encryptContent = async () => {
-      // Mesaj veya IPFS hash olmalı
-      const hasContent = content.trim().length > 0 || ipfsHash.length > 0;
-      
-      console.log("🔍 Encryption check:", {
-        hasContent,
-        contentLength: content.length,
-        ipfsHashLength: ipfsHash.length,
-        hasFheInstance: !!fheInstance,
-        hasContractAddress: !!contractAddress,
-        hasUserAddress: !!userAddress
-      });
-      
-      if (!hasContent || !fheInstance || !contractAddress || !userAddress) {
-        setEncryptedData(null);
-        setIsEncrypting(false); // ← ÖNEMLİ: Burada da false'a çek
-        return;
-      }
-      
-      setIsEncrypting(true);
-      console.log("🔐 Starting encryption...");
-      try {
-        // Şifrelenecek veri: Mesaj varsa mesaj, yoksa IPFS hash
-        const dataToEncrypt = content.trim() || ipfsHash;
-        console.log("📝 Data to encrypt:", dataToEncrypt.substring(0, 50));
-        
-        // Convert content to BigInt (first 32 bytes)
-        const encoder = new TextEncoder();
-        const contentBytes = encoder.encode(dataToEncrypt.slice(0, 32));
-        const paddedBytes = new Uint8Array(32);
-        paddedBytes.set(contentBytes);
-        
-        let value = 0n;
-        for (let i = 0; i < 32; i++) {
-          value = (value << 8n) | BigInt(paddedBytes[i]);
-        }
-        
-        // Encrypt with Zama FHE
-        const input = fheInstance.createEncryptedInput(contractAddress, userAddress);
-        input.add256(value);
-        const encryptedInput = await input.encrypt();
-        
-        const handleHex = '0x' + Array.from(encryptedInput.handles[0])
-          .map((b: unknown) => (b as number).toString(16).padStart(2, '0'))
-          .join('');
-        const proofHex = '0x' + Array.from(encryptedInput.inputProof)
-          .map((b: unknown) => (b as number).toString(16).padStart(2, '0'))
-          .join('');
-        
-        setEncryptedData({ handle: handleHex, inputProof: proofHex });
-        console.log("✅ Content encrypted with Zama FHE", {
-          handleLength: handleHex.length,
-          proofLength: proofHex.length
-        });
-      } catch (err) {
-        console.error("❌ Encryption error:", err);
-        setEncryptedData(null);
-      } finally {
-        console.log("🏁 Encryption finished, setting isEncrypting=false");
-        setIsEncrypting(false);
-      }
-    };
+  // Encrypt content on-demand (when user clicks send) - EMELMARKET PATTERN
+  const encryptContent = async (instance: any) => {
+    if (!contractAddress || !userAddress) {
+      throw new Error("Missing contract or user address");
+    }
+
+    // Şifrelenecek veri: Mesaj varsa mesaj, yoksa IPFS hash
+    const dataToEncrypt = content.trim() || ipfsHash;
+    if (!dataToEncrypt) {
+      throw new Error("No content to encrypt");
+    }
+
+    console.log("🔐 Starting encryption with FHE SDK (EmelMarket pattern)...");
+    console.log("📝 Data to encrypt:", dataToEncrypt.substring(0, 50));
     
-    encryptContent();
-  }, [content, ipfsHash, fheInstance, contractAddress, userAddress]);
+    // Convert content to BigInt (64-bit for euint64)
+    const encoder = new TextEncoder();
+    const contentBytes = encoder.encode(dataToEncrypt.slice(0, 8)); // 8 bytes for euint64
+    const paddedBytes = new Uint8Array(8);
+    paddedBytes.set(contentBytes);
+    
+    let value = 0n;
+    for (let i = 0; i < 8; i++) {
+      value = (value << 8n) | BigInt(paddedBytes[i]);
+    }
+    console.log("✅ BigInt value ready (64-bit):", value.toString());
+    
+    // EMELMARKET PATTERN - Direct SDK encryption
+    const encryptedValue = await instance
+      .createEncryptedInput(contractAddress, userAddress)
+      .add64(value)
+      .encrypt();
+    
+    console.log("✅ FHE SDK encryption complete!", {
+      handlesLength: encryptedValue.handles.length,
+      firstHandle: encryptedValue.handles[0]?.substring(0, 20) + "...",
+      proofLength: encryptedValue.inputProof.length
+    });
+
+    return {
+      handles: encryptedValue.handles,
+      inputProof: encryptedValue.inputProof
+    };
+  };
 
   // Form validation
   useEffect(() => {
     let valid = false;
     
-    // Base validations
-    const baseValid = isConnected &&
+    // Base validations - NO encryption check (will encrypt on submit)
+    valid = isConnected &&
       !!receiver &&
       isAddress(receiver) &&
       receiver.toLowerCase() !== userAddress?.toLowerCase() &&
-      (content.trim().length > 0 || ipfsHash.length > 0); // Mesaj VEYA dosya olmalı
-    
-    // Zama contract: encrypted data + unlock time
-    valid = baseValid && 
-      !!encryptedData && 
-      !isEncrypting &&
-      unlockTimestamp > Math.floor(Date.now() / 1000);
+      (content.trim().length > 0 || ipfsHash.length > 0) && // Mesaj VEYA dosya olmalı
+      unlockTimestamp > Math.floor(Date.now() / 1000); // Future time
     
     setIsFormValid(valid);
-  }, [isConnected, receiver, userAddress, content, ipfsHash, unlockTimestamp, encryptedData, isEncrypting]);
+  }, [isConnected, receiver, userAddress, content, ipfsHash, unlockTimestamp]);
   
   // Dosya yükleme fonksiyonu (IPFS - şu an kullanılmıyor)
   const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -372,26 +339,46 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     !!receiver && 
     isAddress(receiver) &&
     !!content;
-  // unlockTimestamp > 0 kontrolünü kaldırdık - for-fee modunda sıfır olacak
+  
   // Zama Contract Write - FHE encrypted
-  const { config: configZama } = usePrepareContractWrite({
+  const { config: configZama, error: prepareError } = usePrepareContractWrite({
     address: contractAddress as `0x${string}`,
-    abi: chronoMessageZamaAbi,
+    abi: confidentialMessageAbi, // ✅ NEW: EmelMarket Pattern ABI
     functionName: "sendMessage",
     args: encryptedData && isZamaContract
       ? [
           receiver as `0x${string}`,
-          encryptedData.handle as `0x${string}`,
+          encryptedData.handles[0] as `0x${string}`, // EmelMarket pattern: handles[0]
           encryptedData.inputProof as `0x${string}`,
-          BigInt(unlockTimestamp)
+          // ✅ FIX: Always use NOW + 60s to prevent "unlock time in past" error
+          // because encryption takes time and unlock time becomes stale
+          BigInt(Math.floor(Date.now() / 1000) + 60)
         ]
       : undefined,
-    enabled: shouldPrepare && isZamaContract && !!encryptedData && !isEncrypting
+    enabled: shouldPrepare && isZamaContract && !!encryptedData && !isEncrypting,
+    onSuccess: (config: any) => {
+      console.log("✅ usePrepareContractWrite SUCCESS - config ready:", config);
+    },
+    onError: (error: any) => {
+      console.error("❌ usePrepareContractWrite ERROR:", error);
+    }
   });
   
   // Zama write hook
   const zamaWrite = useContractWrite(configZama);
-  const { data, isLoading: isPending, write } = zamaWrite;
+  const { data, isLoading: isPending, write, error: writeError } = zamaWrite;
+  
+  // Debug logs
+  useEffect(() => {
+    console.log("🔍 Contract Write State:", {
+      hasConfig: !!configZama,
+      hasWrite: !!write,
+      isPending,
+      prepareError: prepareError?.message,
+      writeError: writeError?.message,
+      encryptedData: !!encryptedData
+    });
+  }, [configZama, write, isPending, prepareError, writeError, encryptedData]);
   
   const { isLoading: isConfirming, isSuccess } = useWaitForTransaction({ 
     hash: data?.hash 
@@ -423,6 +410,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       setAttachedFile(null);
       setIpfsHash("");
       setContentType(0);
+      setEncryptedData(null); // Clear encrypted data
       setError(null);
       setSuccessToast(true);
       setTimeout(() => setSuccessToast(false), 5000);
@@ -433,7 +421,30 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     }
   }, [isSuccess]); // onSubmitted'ı bağımlılıklardan kaldırdık
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  // Auto-send transaction after encryption completes AND write is ready
+  useEffect(() => {
+    console.log("🔍 Auto-send check:", {
+      hasEncryptedData: !!encryptedData,
+      isEncrypting,
+      hasWrite: !!write,
+    });
+    
+    // If encryption just completed and write is ready, auto-send
+    if (encryptedData && !isEncrypting && write) {
+      console.log("📤 Auto-sending transaction now that write() is ready...");
+      setTimeout(() => {
+        try {
+          write();
+        } catch (err) {
+          console.error("❌ Transaction error:", err);
+          setError(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+      }, 100); // Small delay to ensure config is fully ready
+    }
+    
+  }, [encryptedData, isEncrypting, write]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     
     if (!isConnected) {
@@ -453,12 +464,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return;
     }
     
-    // Zama FHE validation
-    if (!encryptedData || isEncrypting) {
-      setError("⏳ Content encryption in progress, please wait...");
-      return;
-    }
-    
     // Time validation
     if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
       setError("Please select a valid date.");
@@ -469,18 +474,45 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return;
     }
 
-    if (!write) {
-      setError("Contract write function not available. Please check your network connection and try again.");
-      return;
-    }
-
     setError(null);
     
+    // If already encrypted, do nothing (auto-send will handle it)
+    if (encryptedData && !isEncrypting) {
+      console.log("📤 Already encrypted, waiting for auto-send...");
+      setError("⏳ Preparing transaction...");
+      return;
+    }
+    
+    // Encrypt content
+    setIsEncrypting(true);
+    
     try {
-      console.log("📤 Sending encrypted message with Zama FHE...");
-      write(); // Transaction parameters already in config
+      console.log("📤 Starting Zama FHE encryption...");
+      
+      // Initialize FHE if not already initialized
+      let instance = fheInstance;
+      if (!instance) {
+        console.log("🔧 FHE not initialized, initializing now...");
+        const initialized = await initializeFHE();
+        if (!initialized) {
+          throw new Error("Failed to initialize FHE");
+        }
+        instance = initialized;
+      }
+      
+      // Encrypt content
+      console.log("🔐 Encrypting content...");
+      const encrypted = await encryptContent(instance as any);
+      setEncryptedData(encrypted);
+      setIsEncrypting(false);
+      
+      console.log("✅ Encryption complete! Waiting for transaction to auto-send...");
+      setError("✅ Message encrypted! Preparing transaction...");
+      
     } catch (err) {
-      setError(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error("❌ Error:", err);
+      setError(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setIsEncrypting(false);
     }
   };
 
@@ -828,10 +860,16 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       <button
         type="submit"
-        disabled={isPending || isConfirming || isEncrypting}
+        disabled={isPending || isConfirming || isEncrypting || (!!encryptedData && !write)}
         className="w-full rounded-lg bg-gradient-to-r from-aurora via-sky-500 to-sunset px-4 py-3 text-center text-sm font-semibold uppercase tracking-widest text-slate-900 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isPending || isConfirming ? "Sending transaction..." : "Send Message"}
+        {isEncrypting 
+          ? "🔐 Encrypting..." 
+          : isPending || isConfirming 
+            ? "📤 Sending transaction..." 
+            : encryptedData && !write
+              ? "⏳ Preparing transaction..."
+              : "🔐 Send Message"}
       </button>
       {data?.hash ? (
         <p className="text-xs text-text-light/60">

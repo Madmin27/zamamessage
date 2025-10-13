@@ -1,4 +1,8 @@
-export const chronoMessageZamaAbi = [
+// ConfidentialMessage ABI - EmelMarket Pattern
+// Contract: 0xB274067B551FaA7c79a146B5215136454aE912bB
+// Network: Sepolia
+
+export const confidentialMessageAbi = [
   {
     "anonymous": false,
     "inputs": [
@@ -13,6 +17,7 @@ export const chronoMessageZamaAbi = [
     "inputs": [
       { "indexed": true, "internalType": "uint256", "name": "messageId", "type": "uint256" },
       { "indexed": true, "internalType": "address", "name": "sender", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "receiver", "type": "address" },
       { "indexed": false, "internalType": "uint256", "name": "unlockTime", "type": "uint256" }
     ],
     "name": "MessageSent",
@@ -20,20 +25,27 @@ export const chronoMessageZamaAbi = [
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
-    "name": "getMessageMetadata",
+    "name": "getMessageInfo",
     "outputs": [
       { "internalType": "address", "name": "sender", "type": "address" },
       { "internalType": "address", "name": "receiver", "type": "address" },
       { "internalType": "uint256", "name": "unlockTime", "type": "uint256" },
-      { "internalType": "bool", "name": "isUnlocked", "type": "bool" }
+      { "internalType": "bool", "name": "exists", "type": "bool" }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
-    "name": "getUserMessageCount",
-    "outputs": [{ "internalType": "uint256", "name": "count", "type": "uint256" }],
+    "name": "getReceivedMessages",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "getSentMessages",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -47,14 +59,14 @@ export const chronoMessageZamaAbi = [
   {
     "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
     "name": "readMessage",
-    "outputs": [{ "internalType": "euint256", "name": "", "type": "uint256" }],
+    "outputs": [{ "internalType": "euint64", "name": "content", "type": "uint256" }],  // ✅ CHANGED: euint256 → euint64
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
       { "internalType": "address", "name": "receiver", "type": "address" },
-      { "internalType": "externalEuint256", "name": "encryptedContent", "type": "bytes32" },
+      { "internalType": "externalEuint64", "name": "encryptedContent", "type": "bytes32" },  // ✅ CHANGED: externalEuint256 → externalEuint64
       { "internalType": "bytes", "name": "inputProof", "type": "bytes" },
       { "internalType": "uint256", "name": "unlockTime", "type": "uint256" }
     ],
@@ -64,3 +76,6 @@ export const chronoMessageZamaAbi = [
     "type": "function"
   }
 ] as const;
+
+// For backward compatibility - use new ABI
+export const chronoMessageZamaAbi = confidentialMessageAbi;
