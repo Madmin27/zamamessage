@@ -9,6 +9,8 @@
 // Pattern: await initSDK() → await createInstance(SepoliaConfig)
 // ====================================================================
 
+import { withSepoliaOverrides } from "@/lib/zama-config";
+
 let sdkInstance: any = null;
 
 /**
@@ -28,13 +30,20 @@ export async function getRelayerSDK(): Promise<any> {
       '@zama-fhe/relayer-sdk/bundle'
     );
 
+    const config = withSepoliaOverrides(SepoliaConfig);
+    console.log("🔧 Relayer config overrides:", {
+      acl: config.aclContractAddress,
+      inputVerifier: config.inputVerifierContractAddress,
+      relayer: config.relayerUrl,
+      network: config.network,
+    });
+
     // Initialize SDK
     await initSDK();
     console.log("✅ SDK initialized");
 
-    // Create instance with JUST SepoliaConfig - that's it!
-    // EmelMarket does it exactly like this
-    sdkInstance = await createInstance(SepoliaConfig);
+  // Create instance using SepoliaConfig + override addresses
+    sdkInstance = await createInstance(config);
 
     console.log("✅ Zama Relayer SDK ready! (EmelMarket npm pattern)");
 

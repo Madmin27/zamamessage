@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork } from "wagmi";
+import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork, usePublicClient } from "wagmi";
 import { confidentialMessageAbi } from "../lib/abi-confidential"; // ✅ NEW: EmelMarket Pattern ABI
 import { appConfig } from "../lib/env";
 import { isAddress } from "viem";
@@ -17,6 +17,25 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
+const DEFAULT_RECEIVER = "0x50587bC2bef7C66bC2952F126ADbafCc4Ab9c9D0" as const;
+
+const toHex = (input: string | Uint8Array | number[] | undefined): `0x${string}` => {
+  if (!input) {
+    return "0x" as `0x${string}`;
+  }
+
+  if (typeof input === "string") {
+    return (input.startsWith("0x") ? input : `0x${input}`) as `0x${string}`;
+  }
+
+  const arrayLike = input instanceof Uint8Array ? input : Uint8Array.from(input);
+  const hex = Array.from(arrayLike)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+  return (`0x${hex}`) as `0x${string}`;
+};
+
 interface MessageFormProps {
   onSubmitted?: () => void;
 }
@@ -24,6 +43,7 @@ interface MessageFormProps {
 export function MessageForm({ onSubmitted }: MessageFormProps) {
   const { isConnected, address: userAddress } = useAccount();
   const { chain } = useNetwork();
+  const publicClient = usePublicClient();
   const contractAddress = useContractAddress();
   const hasContract = useHasContract();
   
@@ -33,7 +53,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   // Zama FHE only - No version switching needed
   const isZamaContract = true; // Her zaman Zama kullan
 
-  const [receiver, setReceiver] = useState("");
+  const [receiver, setReceiver] = useState<string>(DEFAULT_RECEIVER);
   const [content, setContent] = useState("");
   const [unlockMode, setUnlockMode] = useState<"preset" | "custom">("preset");
   const [presetDuration, setPresetDuration] = useState<number>(10); // 10 saniye
@@ -57,6 +77,30 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [encryptedData, setEncryptedData] = useState<{ handles: string[]; inputProof: string } | null>(null);
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [fheInitialized, setFheInitialized] = useState(false); // Track if FHE was initialized
+  const [chainTimestamp, setChainTimestamp] = useState<number | null>(null);
+  const [txUnlockTime, setTxUnlockTime] = useState<number | null>(null);
+  const UNLOCK_BUFFER_SECONDS = 900; // Keep unlock time at least 15 minutes ahead of the chain
+
+  const computeSafeUnlockTime = (
+    chainSeconds: number | null,
+    desiredSeconds: number | null,
+    options: { includeWallClock?: boolean } = {}
+  ) => {
+    const { includeWallClock = true } = options;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const sanitizedDesired = typeof desiredSeconds === "number" && Number.isFinite(desiredSeconds)
+      ? desiredSeconds
+      : nowSeconds;
+    const sanitizedChain = typeof chainSeconds === "number" && Number.isFinite(chainSeconds)
+      ? chainSeconds
+      : nowSeconds;
+    const chainBuffered = sanitizedChain + UNLOCK_BUFFER_SECONDS;
+    const baseline = Math.max(sanitizedDesired, chainBuffered);
+    if (!includeWallClock) {
+      return baseline;
+    }
+    return Math.max(baseline, nowSeconds + UNLOCK_BUFFER_SECONDS);
+  };
   
   // Form validation state
   const [isFormValid, setIsFormValid] = useState(false);
@@ -89,6 +133,34 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     });
   }, []);
 
+  // Refresh chain timestamp periodically to guard against client clock drift
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!publicClient) {
+      return;
+    }
+
+    const updateTimestamp = async () => {
+      try {
+        const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
+        if (!cancelled) {
+          setChainTimestamp(Number(latestBlock.timestamp));
+        }
+      } catch (err) {
+        console.error("⚠️ Chain timestamp fetch failed", err);
+      }
+    };
+
+    updateTimestamp();
+    const intervalId = setInterval(updateTimestamp, 30_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [publicClient]);
+
   // Unlock timestamp hesaplama (preset veya custom)
   const unlockTimestamp = useMemo(() => {
     if (unlockMode === "preset") {
@@ -112,7 +184,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   // Lazy FHE Initialization - using proven fhevmjs SDK
   const initializeFHE = async () => {
-    if (fheInitialized) return; // Already initialized
+    if (fheInitialized) return fheInstance; // Already initialized
     
     console.log("🚀 Lazy FHE Init starting (fhevmjs SDK)...", {
       hasContractAddress: !!contractAddress,
@@ -136,7 +208,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       // EMELMARKET PATTERN - FHE instance comes from context, not manual init
       if (!fhe) {
         console.log("⏳ FHE SDK still loading from FheProvider...");
-        throw new Error("FHE SDK not ready yet");
+        throw new Error("FHE SDK not ready yet - button should be disabled!");
       }
       
       setFheInstance(fhe);
@@ -155,6 +227,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     if (!contractAddress || !userAddress) {
       throw new Error("Missing contract or user address");
     }
+
+    console.log("🔐 Starting encryption with:");
+    console.log("  Contract Address:", contractAddress);
+    console.log("  User Address (msg.sender):", userAddress);
+    console.log("  ⚠️ IMPORTANT: inputProof will be valid ONLY for this userAddress!");
 
     // Şifrelenecek veri: Mesaj varsa mesaj, yoksa IPFS hash
     const dataToEncrypt = content.trim() || ipfsHash;
@@ -184,14 +261,21 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       .encrypt();
     
     console.log("✅ FHE SDK encryption complete!", {
-      handlesLength: encryptedValue.handles.length,
-      firstHandle: encryptedValue.handles[0]?.substring(0, 20) + "...",
-      proofLength: encryptedValue.inputProof.length
+      handlesLength: encryptedValue.handles?.length,
+      handlesType: typeof encryptedValue.handles?.[0],
+      handles0: encryptedValue.handles?.[0],
+      proofType: typeof encryptedValue.inputProof,
+      proof: encryptedValue.inputProof,
+      fullResult: encryptedValue
     });
 
+    // Convert to hex strings if needed
+    const handleHex = toHex(encryptedValue.handles[0] as any);
+    const proofHex = toHex(encryptedValue.inputProof as any);
+
     return {
-      handles: encryptedValue.handles,
-      inputProof: encryptedValue.inputProof
+      handles: [handleHex],
+      inputProof: proofHex
     };
   };
 
@@ -334,35 +418,61 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   };
 
   // Prepare contract write with proper parameters
-  const shouldPrepare = isFormValid && 
-    !!contractAddress && 
-    !!receiver && 
-    isAddress(receiver) &&
-    !!content;
+  const basePrepareReady = isFormValid && !!contractAddress;
+  const preparedUnlockTime = useMemo(() => {
+    if (txUnlockTime == null) {
+      return null;
+    }
+    return computeSafeUnlockTime(chainTimestamp, txUnlockTime, { includeWallClock: false });
+  }, [chainTimestamp, txUnlockTime]);
+
+  const shouldPrepare = basePrepareReady && !!encryptedData && !isEncrypting && preparedUnlockTime !== null;
   
   // Zama Contract Write - FHE encrypted
   const { config: configZama, error: prepareError } = usePrepareContractWrite({
     address: contractAddress as `0x${string}`,
     abi: confidentialMessageAbi, // ✅ NEW: EmelMarket Pattern ABI
     functionName: "sendMessage",
-    args: encryptedData && isZamaContract
+    args: encryptedData && isZamaContract && preparedUnlockTime !== null
       ? [
           receiver as `0x${string}`,
-          encryptedData.handles[0] as `0x${string}`, // EmelMarket pattern: handles[0]
-          encryptedData.inputProof as `0x${string}`,
-          // ✅ FIX: Always use NOW + 60s to prevent "unlock time in past" error
-          // because encryption takes time and unlock time becomes stale
-          BigInt(Math.floor(Date.now() / 1000) + 60)
+          encryptedData.handles[0] as `0x${string}`, // externalEuint64 (bytes32 handle)
+          encryptedData.inputProof as `0x${string}`, // bytes inputProof - AYRI PARAMETRE!
+          BigInt(preparedUnlockTime)
         ]
       : undefined,
-    enabled: shouldPrepare && isZamaContract && !!encryptedData && !isEncrypting,
+    enabled: shouldPrepare && isZamaContract,
     onSuccess: (config: any) => {
       console.log("✅ usePrepareContractWrite SUCCESS - config ready:", config);
     },
     onError: (error: any) => {
       console.error("❌ usePrepareContractWrite ERROR:", error);
+      console.error("❌ Error message:", error.message);
+      console.error("❌ Error cause:", error.cause);
+      try {
+        const payload = JSON.stringify(error, (_key, value) => typeof value === "bigint" ? value.toString() : value, 2);
+        console.error("❌ Error details:", payload);
+      } catch (jsonErr) {
+        console.error("❌ Error details stringify failed:", jsonErr);
+      }
     }
   });
+
+  // Log prepareError if it exists
+  useEffect(() => {
+    if (prepareError) {
+      console.error("❌❌❌ PREPARE ERROR DETECTED:", prepareError);
+      console.error("Error shortMessage:", (prepareError as any).shortMessage);
+      console.error("Error details:", (prepareError as any).details);
+      console.error("Error metaMessages:", (prepareError as any).metaMessages);
+      const shortMessage = (prepareError as any).shortMessage || prepareError.message;
+      setError(
+        shortMessage
+          ? `⛔ On-chain simülasyon başarısız: ${shortMessage}`
+          : "⛔ On-chain simülasyon başarısız oldu. Lütfen birkaç saniye sonra tekrar deneyin."
+      );
+    }
+  }, [prepareError]);
   
   // Zama write hook
   const zamaWrite = useContractWrite(configZama);
@@ -389,7 +499,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     if (!mounted) return { local: "", utc: "", relative: "", selected: "" };
     
     try {
-      const timestamp = unlockTimestamp * 1000;
+      const activeUnlock = txUnlockTime ?? unlockTimestamp;
+      const timestamp = activeUnlock * 1000;
       const localTime = dayjs(timestamp).format("DD MMM YYYY, HH:mm");
       const utcTime = dayjs(timestamp).utc().format("DD MMM YYYY, HH:mm");
       const selectedTime = dayjs(timestamp).tz(selectedTimezone).format("DD MMM YYYY, HH:mm");
@@ -400,17 +511,18 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       console.error("Tarih display hatası:", err);
       return { local: "---", utc: "---", selected: "---", relative: "---" };
     }
-  }, [unlockTimestamp, mounted, selectedTimezone]);
+  }, [unlockTimestamp, mounted, selectedTimezone, txUnlockTime]);
 
   useEffect(() => {
     if (isSuccess) {
       console.log("✅ MessageForm: Message sent successfully");
-      setReceiver("");
+      setReceiver(DEFAULT_RECEIVER);
       setContent("");
       setAttachedFile(null);
       setIpfsHash("");
       setContentType(0);
       setEncryptedData(null); // Clear encrypted data
+    setTxUnlockTime(null);
       setError(null);
       setSuccessToast(true);
       setTimeout(() => setSuccessToast(false), 5000);
@@ -488,6 +600,27 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     
     try {
       console.log("📤 Starting Zama FHE encryption...");
+
+      let latestChainTimestamp = chainTimestamp;
+      if (publicClient) {
+        try {
+          const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
+          latestChainTimestamp = Number(latestBlock.timestamp);
+          setChainTimestamp(latestChainTimestamp);
+        } catch (blockErr) {
+          console.warn("⚠️ Unable to refresh chain timestamp before send", blockErr);
+        }
+      }
+
+      const safeUnlockForTx = computeSafeUnlockTime(latestChainTimestamp ?? chainTimestamp, unlockTimestamp);
+      setTxUnlockTime(safeUnlockForTx);
+
+      console.log("⏱️ Unlock time prepared", {
+        userSelected: unlockTimestamp,
+        chainBase: latestChainTimestamp ?? chainTimestamp,
+        enforcedUnlock: safeUnlockForTx,
+        bufferSeconds: UNLOCK_BUFFER_SECONDS
+      });
       
       // Initialize FHE if not already initialized
       let instance = fheInstance;
@@ -858,12 +991,22 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       )}
       
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      
+      {/* FHE SDK Loading Indicator */}
+      {!fhe && (
+        <div className="text-sm text-yellow-400 mb-2">
+          ⏳ Loading FHE encryption system...
+        </div>
+      )}
+      
       <button
         type="submit"
-        disabled={isPending || isConfirming || isEncrypting || (!!encryptedData && !write)}
+        disabled={!fhe || isPending || isConfirming || isEncrypting || (!!encryptedData && !write)}
         className="w-full rounded-lg bg-gradient-to-r from-aurora via-sky-500 to-sunset px-4 py-3 text-center text-sm font-semibold uppercase tracking-widest text-slate-900 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isEncrypting 
+        {!fhe
+          ? "⏳ Initializing FHE..."
+          : isEncrypting 
           ? "🔐 Encrypting..." 
           : isPending || isConfirming 
             ? "📤 Sending transaction..." 

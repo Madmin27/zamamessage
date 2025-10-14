@@ -1,123 +1,134 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {FHE, euint256, externalEuint256} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, externalEuint64, euint64} from "@fhevm/solidity/lib/FHE.sol";
 import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
-/// @title ChronoMessageZama - Zama FHE ile şifreli zaman kilitli mesajlaşma
-/// @notice Mesajlar FHE ile şifrelenir ve sadece unlockTime'dan sonra okunabilir
-/// @dev Zama FHEVM - Sepolia testnet'te çalışır
-/// @dev SepoliaConfig'den inherit ederek otomatik FHEVM yapılandırması sağlanır
+/// @title ChronoMessageZama
+/// @notice Time-locked confidential messaging contract backed by Zama FHEVM on Sepolia
+/// @dev Uses the latest @fhevm/solidity@0.7.0 `fromExternal` pattern to accept relayer encrypted inputs
 contract ChronoMessageZama is SepoliaConfig {
-    
     struct Message {
         address sender;
-        address receiver;    // ✅ EKLENDI: Alıcı adresi
+        address receiver;
         uint256 unlockTime;
-        euint256 encryptedContent;  // FHE ile şifrelenmiş mesaj içeriği (256 bit)
+        euint64 encryptedContent;
         bool exists;
     }
-    
-    mapping(uint256 => Message) private messages;
+
+    mapping(uint256 => Message) private _messages;
+    mapping(address => uint256[]) private _sentMessages;
+    mapping(address => uint256[]) private _receivedMessages;
     uint256 public messageCount;
-    
-    event MessageSent(
-        uint256 indexed messageId,
-        address indexed sender,
-        uint256 unlockTime
-    );
-    
-    event MessageRead(
-        uint256 indexed messageId,
-        address indexed reader
-    );
-    
-    /// @notice Şifreli mesaj gönder
-    /// @param receiver Mesajı alacak adres
-    /// @param encryptedContent FHE ile şifrelenmiş mesaj handle (externalEuint256 - bytes32)
-    /// @param inputProof Şifreleme kanıtı
-    /// @param unlockTime Mesajın açılabileceği Unix timestamp
-    /// @return messageId Oluşturulan mesajın ID'si
+
+    event MessageSent(uint256 indexed messageId, address indexed sender, address indexed receiver, uint256 unlockTime);
+    event MessageRead(uint256 indexed messageId, address indexed reader);
+
+    /// @notice Stores an encrypted message that becomes readable after `unlockTime`
+    /// @param receiver Address that can decrypt the message once unlocked
+    /// @param encryptedContent Zama relayer handle (externalEuint64) produced by the SDK
+    /// @param inputProof Proof returned by the relayer SDK to authorise the handle usage
+    /// @param unlockTime Unix timestamp when the message becomes readable
+    /// @return messageId Incremental identifier for the stored message
     function sendMessage(
         address receiver,
-        externalEuint256 encryptedContent,
+        externalEuint64 encryptedContent,
         bytes calldata inputProof,
         uint256 unlockTime
     ) external returns (uint256 messageId) {
-        require(receiver != address(0), "Invalid receiver address");
-        require(unlockTime > block.timestamp, "Unlock time must be in future");
-        
-        // Convert external encrypted handle to euint256
-        euint256 encrypted = FHE.fromExternal(encryptedContent, inputProof);
-        
+        require(receiver != address(0), "Invalid receiver");
+        require(receiver != msg.sender, "Self messaging disabled");
+        require(unlockTime > block.timestamp, "Unlock must be future");
+
+        euint64 encrypted = FHE.fromExternal(encryptedContent, inputProof);
+
         messageId = messageCount;
         messageCount++;
-        
-        messages[messageId] = Message({
+
+        _messages[messageId] = Message({
             sender: msg.sender,
             receiver: receiver,
             unlockTime: unlockTime,
             encryptedContent: encrypted,
             exists: true
         });
-        
-        // Access control: Contract, gönderen ve ALICI okuyabilir
+
+        _sentMessages[msg.sender].push(messageId);
+        _receivedMessages[receiver].push(messageId);
+
+        // Grant ACL permissions so both parties and the contract can operate on the ciphertext.
         FHE.allowThis(encrypted);
         FHE.allow(encrypted, msg.sender);
-        FHE.allow(encrypted, receiver);  // ✅ Alıcıya da izin ver
-        
-        emit MessageSent(messageId, msg.sender, unlockTime);
-    }    /// @notice Şifreli mesajı al (zaman kilidi açıldıysa)
-    /// @param messageId Okunacak mesajın ID'si
-    /// @return encryptedContent Şifreli mesaj içeriği (decrypt için frontend'e gider)
-    function readMessage(uint256 messageId) external view returns (euint256) {
-        Message storage m = messages[messageId];
+        FHE.allow(encrypted, receiver);
+
+        emit MessageSent(messageId, msg.sender, receiver, unlockTime);
+    }
+
+    /// @notice Helper to mirror previous API for sent message counts
+    function getUserMessageCount(address user) external view returns (uint256) {
+        return _sentMessages[user].length;
+    }
+
+    /// @notice Returns the encrypted payload once the message unlocks and the caller is authorised
+    /// @param messageId Identifier of the message to read
+    /// @return content Ciphertext bound to the sender/receiver pair
+    function readMessage(uint256 messageId) external returns (euint64 content) {
+        Message storage m = _messages[messageId];
         require(m.exists, "Message not found");
-        require(block.timestamp >= m.unlockTime, "Message still locked");
-        require(msg.sender == m.sender || msg.sender == m.receiver, "Only sender or receiver can read");
-        
+        require(block.timestamp >= m.unlockTime, "Message locked");
+        require(msg.sender == m.sender || msg.sender == m.receiver, "Not authorised");
+
+        emit MessageRead(messageId, msg.sender);
         return m.encryptedContent;
     }
-    
-    /// @notice Mesaj metadata'sını al (şifrelenmemiş bilgiler)
-    /// @param messageId Mesaj ID'si
-    /// @return sender Gönderen adresi
-    /// @return receiver Alıcı adresi
-    /// @return unlockTime Kilidi açılma zamanı
-    /// @return isUnlocked Mesaj okunabilir mi?
-    function getMessageMetadata(uint256 messageId) external view returns (
-        address sender,
-        address receiver,
-        uint256 unlockTime,
-        bool isUnlocked
-    ) {
-        Message storage m = messages[messageId];
-        require(m.exists, "Message not found");
-        
-        return (
-            m.sender,
-            m.receiver,
-            m.unlockTime,
-            block.timestamp >= m.unlockTime
-        );
+
+    /// @notice Lightweight metadata accessor used by the frontend to populate lists
+    function getMessageMetadata(uint256 messageId)
+        external
+        view
+        returns (address sender, address receiver, uint256 unlockTime, bool isUnlocked)
+    {
+        Message storage m = _messages[messageId];
+        if (!m.exists) {
+            return (address(0), address(0), 0, false);
+        }
+        return (m.sender, m.receiver, m.unlockTime, block.timestamp >= m.unlockTime);
     }
-    
-    /// @notice Kullanıcının gönderdiği mesaj sayısını al
-    /// @param user Kullanıcı adresi
-    /// @return count Mesaj sayısı
-    function getUserMessageCount(address user) external view returns (uint256 count) {
-        for (uint256 i = 0; i < messageCount; i++) {
-            if (messages[i].sender == user) {
-                count++;
-            }
+
+    /// @notice Backwards-compatible metadata helper
+    function getMessageInfo(uint256 messageId)
+        external
+        view
+        returns (address sender, address receiver, uint256 unlockTime, bool exists)
+    {
+        Message storage m = _messages[messageId];
+        if (!m.exists) {
+            return (address(0), address(0), 0, false);
+        }
+        return (m.sender, m.receiver, m.unlockTime, true);
+    }
+
+    /// @notice Returns message ids the user has sent
+    function getSentMessages(address user) external view returns (uint256[] memory messageIds) {
+        uint256[] storage sent = _sentMessages[user];
+        messageIds = new uint256[](sent.length);
+        for (uint256 i = 0; i < sent.length; i++) {
+            messageIds[i] = sent[i];
         }
     }
-    
-    /// @notice Mesajın kilit durumunu kontrol et
-    /// @param messageId Mesaj ID'si
-    /// @return isLocked Mesaj hala kilitli mi?
-    function isMessageLocked(uint256 messageId) external view returns (bool isLocked) {
-        Message storage m = messages[messageId];
+
+    /// @notice Returns message ids the user has received
+    function getReceivedMessages(address user) external view returns (uint256[] memory messageIds) {
+        uint256[] storage received = _receivedMessages[user];
+        messageIds = new uint256[](received.length);
+        for (uint256 i = 0; i < received.length; i++) {
+            messageIds[i] = received[i];
+        }
+    }
+
+    /// @notice Checks if a given message currently remains locked
+    function isMessageLocked(uint256 messageId) external view returns (bool) {
+        Message storage m = _messages[messageId];
         require(m.exists, "Message not found");
         return block.timestamp < m.unlockTime;
     }

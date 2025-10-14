@@ -18,10 +18,14 @@ declare module "@zama-fhe/relayer-sdk" {
 
   export const SepoliaConfig: {
     chainId: number;
-    aclAddress: string;
-    kmsVerifierAddress: string;
-    kmsSignerAddress: string;
-    gatewayUrl: string;
+    gatewayChainId: number;
+    aclContractAddress: string;
+    kmsContractAddress: string;
+    inputVerifierContractAddress: string;
+    verifyingContractAddressDecryption: string;
+    verifyingContractAddressInputVerification: string;
+    relayerUrl: string;
+    network: string;
   };
 
   export function initSDK(): Promise<void>;

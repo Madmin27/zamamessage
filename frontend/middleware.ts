@@ -19,6 +19,18 @@ export function middleware(request: NextRequest) {
         'Content-Type, Authorization'
     );
 
+    // Avoid stale html/chunks for test page and next static assets
+    const p = request.nextUrl.pathname;
+    if (
+        p.startsWith('/test-new-api') ||
+        p.startsWith('/_next/static/chunks/app/test-new-api') ||
+        p.startsWith('/_next/static')
+    ) {
+        response.headers.set('Cache-Control', 'no-store');
+        response.headers.set('Pragma', 'no-cache');
+        response.headers.set('Expires', '0');
+    }
+
     return response;
 }
 

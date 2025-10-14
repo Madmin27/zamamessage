@@ -60,13 +60,13 @@ export const confidentialMessageAbi = [
     "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
     "name": "readMessage",
     "outputs": [{ "internalType": "euint64", "name": "content", "type": "uint256" }],  // ✅ CHANGED: euint256 → euint64
-    "stateMutability": "view",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       { "internalType": "address", "name": "receiver", "type": "address" },
-      { "internalType": "externalEuint64", "name": "encryptedContent", "type": "bytes32" },  // ✅ CHANGED: externalEuint256 → externalEuint64
+      { "internalType": "externalEuint64", "name": "encryptedContent", "type": "bytes32" },
       { "internalType": "bytes", "name": "inputProof", "type": "bytes" },
       { "internalType": "uint256", "name": "unlockTime", "type": "uint256" }
     ],

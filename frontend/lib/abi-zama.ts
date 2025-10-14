@@ -13,6 +13,7 @@ export const chronoMessageZamaAbi = [
     "inputs": [
       { "indexed": true, "internalType": "uint256", "name": "messageId", "type": "uint256" },
       { "indexed": true, "internalType": "address", "name": "sender", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "receiver", "type": "address" },
       { "indexed": false, "internalType": "uint256", "name": "unlockTime", "type": "uint256" }
     ],
     "name": "MessageSent",
@@ -47,14 +48,14 @@ export const chronoMessageZamaAbi = [
   {
     "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
     "name": "readMessage",
-    "outputs": [{ "internalType": "euint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
+    "outputs": [{ "internalType": "euint64", "name": "", "type": "uint256" }],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       { "internalType": "address", "name": "receiver", "type": "address" },
-      { "internalType": "externalEuint256", "name": "encryptedContent", "type": "bytes32" },
+      { "internalType": "externalEuint64", "name": "encryptedContent", "type": "bytes32" },
       { "internalType": "bytes", "name": "inputProof", "type": "bytes" },
       { "internalType": "uint256", "name": "unlockTime", "type": "uint256" }
     ],
