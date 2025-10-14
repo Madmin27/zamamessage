@@ -1,6 +1,8 @@
 import { ethers } from "hardhat";
 import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk/node";
-import { applySepoliaRelayerOverrides } from "config/zamaSepolia";
+import { applySepoliaRelayerOverrides } from "../config/zamaSepolia";
+import confidentialMessageDeployment from "../deployments/confidential-message-sepolia.json";
+import zamaDeployment from "../deployments/zama-sepolia.json";
 
 /**
  * Zama konfigürasyonunu doğrulama scripti
@@ -31,8 +33,8 @@ async function main() {
   console.log("\n📝 2. Deploy Edilen Sözleşmeler:");
   console.log("-".repeat(60));
   
-  const confidentialMessageAddr = "0x07b4314c9cC7478F665416425d8d5B80Ba610eB1";
-  const chronoMessageZamaAddr = "0x65016d7E35EC1830d599991d82381bf03eEC2987";
+  const confidentialMessageAddr = confidentialMessageDeployment.address;
+  const chronoMessageZamaAddr = zamaDeployment.address;
   
   console.log("ConfidentialMessage:      ", confidentialMessageAddr);
   console.log("ChronoMessageZama:        ", chronoMessageZamaAddr);
@@ -86,7 +88,30 @@ async function main() {
     }
 
   } catch (error: any) {
-    console.error("❌ Sözleşme erişim hatası:", error.message);
+    if (typeof error?.message === "string" && error.message.includes("HH700")) {
+      console.warn("⚠️  ConfidentialMessage artifact bulunamadı, bu bölüm atlandı.");
+    } else {
+      console.error("❌ Sözleşme erişim hatası:", error.message);
+    }
+  }
+
+  console.log("\n🧾 2b. ChronoMessageZama durumu:");
+  console.log("-".repeat(60));
+
+  try {
+    const ChronoMessageZama = await ethers.getContractAt(
+      "ChronoMessageZama",
+      chronoMessageZamaAddr
+    );
+
+    const messageCountZama = await ChronoMessageZama.messageCount();
+    console.log("✅ Zama sözleşmesi erişilebilir");
+    console.log("   Message Count:         ", messageCountZama.toString());
+
+    const protocolIdZama = await ChronoMessageZama.protocolId();
+    console.log("   Protocol ID:           ", protocolIdZama.toString());
+  } catch (error: any) {
+    console.error("❌ ChronoMessageZama erişim hatası:", error.message);
   }
 
   // 5. Test Şifreleme

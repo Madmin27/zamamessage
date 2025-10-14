@@ -1,4 +1,3 @@
- 
 Kesinlikle zama FHE kullanılarak EVM ağlarında şifreli mesaj göndermeye çalışacağız.
 Öncelikle sadece sepolia ağında yapacağız
 
@@ -6,7 +5,11 @@ Farklı test ve mainnet ağlar için de ekleyelim. Base öncelikli
  
 Bir nft satılmışsa ve hangi cüzdandaysa, ona açılan mesaj
 
- 
+npx hardhat compile
+cache temizle, 
+
+rebuild et, restart et
+
 https://github.com/zama-ai/fhevm 
  burada  nasıl
 
@@ -18,7 +21,7 @@ https://docs.zama.ai/protocol/relayer-sdk-guides
 https://github.com/Madmin27/open-nft-marketplace
 
 
-
+cache temizliği, rebuil ve 
  sudo systemctl restart sealedmessage-frontend && sleep 3 && sudo systemctl status sealedmessage-frontend
 
 
@@ -37,10 +40,10 @@ https://github.com/Madmin27/open-nft-marketplace
 	- `.env.local` üzerindeki `NEXT_PUBLIC_CONTRACT_ADDRESS` yeni kontrata alındı.
 
 - Sıradaki adımlar:
-	1. `MessageForm` akışını `createEncryptedInput` zinciriyle hizala (test bileşenindeki pattern'i reuse et).
-	2. Ana mesaj kontratını (gerekirse) yeni API ile yeniden deploy et ve adresi `.env.local` üzerinden frontend'e geçir.
-	3. Kullanıcıya $ZAMA fee gerekliliklerini anlatan bir uyarı/bilgi tooltip'i ekle.
-	4. Base Sepolia deployment planı için aynı pipeline'ı hazırlayıp relayer konfig override'larını environment tabanlı yap.
+	1. ✅ `MessageForm` akışını `createEncryptedInput` zinciriyle hizala (test bileşenindeki pattern reused).
+	2. ✅ Ana mesaj kontratını yeni API ile yeniden deploy et ve adresi `.env.local` üzerinden frontend'e geçir (0xbD9212F5Df6073a86E6E43813bEDd026C9561468).
+	3. ✅ Kullanıcıya $ZAMA fee gerekliliklerini anlatan uyarı/bilgi tooltip'i ekle.
+	4. ⏳ Base Sepolia deployment planı için aynı pipeline'ı hazırlayıp relayer konfig override'larını environment tabanlı yap.
 
 - Ücret Notları (Zama Confidential Blockchain Protocol):
 	- ZKPoK doğrulaması, decrypt ve cross-chain bridge işlemleri $ZAMA token ile ücretli.

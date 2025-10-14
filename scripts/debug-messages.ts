@@ -1,7 +1,8 @@
 import { ethers } from "hardhat";
+import zamaDeployment from "../deployments/zama-sepolia.json";
 
 async function main() {
-  const contractAddress = "0x65016d7E35EC1830d599991d82381bf03eEC2987";
+  const contractAddress = zamaDeployment.address;
   
   console.log("\n🔍 Debugging sendMessage revert...");
   
@@ -9,7 +10,7 @@ async function main() {
   console.log("Signer:", signer.address);
   
   const ChronoMessageZama = await ethers.getContractFactory("ChronoMessageZama");
-  const contract = ChronoMessageZama.attach(contractAddress);
+  const contract = ChronoMessageZama.attach(contractAddress) as any;
   
   // Test 1: Check requires
   console.log("\n📋 Test 1: Basic validations...");
@@ -75,7 +76,7 @@ async function main() {
   }
   
   // Test 3: Check if Zama's coprocessor contract is working
-  console.log("\n�� Test 3: Checking Zama coprocessor...");
+  console.log("\n📡 Test 3: Checking Zama coprocessor...");
   const coprocessorAddress = "0x848B0066793BcC60346Da1F49049357399B8D595";
   const coprocessorCode = await ethers.provider.getCode(coprocessorAddress);
   

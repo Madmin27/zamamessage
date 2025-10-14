@@ -640,7 +640,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       setIsEncrypting(false);
       
       console.log("✅ Encryption complete! Waiting for transaction to auto-send...");
-      setError("✅ Message encrypted! Preparing transaction...");
+      setError(null); // Clear error - success status will show in separate indicator
       
     } catch (err) {
       console.error("❌ Error:", err);
@@ -715,6 +715,12 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           </p>
         </div>
       )}
+      <div className="rounded-lg border border-amber-400/50 bg-amber-900/20 px-4 py-2 text-xs text-amber-200">
+        <p className="font-semibold">Heads-up: Zama relayer fees</p>
+        <p className="mt-1 leading-relaxed">
+          Proof validation, decrypt, and bridge operations require <span className="font-mono">$ZAMA</span> credits. Decide whether the app, the relayer, or end users cover these costs before going live.
+        </p>
+      </div>
       <div className="flex flex-col gap-2">
         <label htmlFor="receiver" className="text-sm font-semibold uppercase tracking-wide text-cyber-blue">
           Receiver Address
@@ -984,7 +990,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           🔐 Encrypting message with Zama FHE...
         </div>
       )}
-      {encryptedData && !isEncrypting && (
+      {encryptedData && !isEncrypting && !write && (
+        <div className="rounded-lg bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-400/40 p-3 text-sm flex items-center gap-2">
+          <span className="text-green-300">✅ Message encrypted!</span>
+          <span className="text-blue-300 animate-pulse">Preparing transaction...</span>
+        </div>
+      )}
+      {encryptedData && !isEncrypting && write && (
         <div className="rounded-lg bg-green-500/10 border border-green-400/40 p-3 text-sm text-green-300">
           ✅ Message encrypted successfully with Zama FHE
         </div>

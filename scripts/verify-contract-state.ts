@@ -1,7 +1,8 @@
 import { ethers } from "hardhat";
+import zamaDeployment from "../deployments/zama-sepolia.json";
 
 async function main() {
-  const contractAddress = "0x65016d7E35EC1830d599991d82381bf03eEC2987";
+  const contractAddress = zamaDeployment.address;
   
   console.log("\n🔍 Verifying contract on Sepolia...");
   console.log("Contract Address:", contractAddress);
@@ -12,7 +13,7 @@ async function main() {
   
   // Get contract instance
   const ChronoMessageZama = await ethers.getContractFactory("ChronoMessageZama");
-  const contract = ChronoMessageZama.attach(contractAddress);
+  const contract = ChronoMessageZama.attach(contractAddress) as any;
   
   // Check basic state
   try {

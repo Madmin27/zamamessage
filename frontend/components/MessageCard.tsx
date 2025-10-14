@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useContractWrite, useWaitForTransaction, usePublicClient, useAccount, usePrepareContractWrite } from "wagmi";
 import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
@@ -9,6 +9,7 @@ import { appConfig } from "../lib/env";
 import { useContractAddress } from "../lib/useContractAddress";
 import { useNetwork } from "wagmi";
 import { IPFSFileDisplay } from "./IPFSFileDisplay";
+import { useFhe } from "./FheProvider";
 
 dayjs.extend(duration);
 
@@ -40,6 +41,105 @@ interface MessageCardProps {
   };
 }
 
+const globalTextDecoder = typeof TextDecoder !== "undefined" ? new TextDecoder() : undefined;
+
+const stripHexPrefix = (value: string) => (value.startsWith("0x") ? value.slice(2) : value);
+
+const hexToBytes = (hexValue: string): Uint8Array => {
+  const sanitized = stripHexPrefix(hexValue).toLowerCase();
+  if (sanitized.length === 0) {
+    return new Uint8Array();
+  }
+  const length = Math.ceil(sanitized.length / 2);
+  const bytes = new Uint8Array(length);
+  for (let index = 0; index < length; index++) {
+    const sliceStart = sanitized.length - (index + 1) * 2;
+    const byteHex = sanitized.slice(Math.max(0, sliceStart), sliceStart + 2);
+    const parsed = parseInt(byteHex.padStart(2, "0"), 16);
+    if (Number.isNaN(parsed)) {
+      throw new Error("Ciphertext contains non-hex characters");
+    }
+    bytes[length - index - 1] = parsed;
+  }
+  return bytes;
+};
+
+const decodeAscii = (bytes: Uint8Array): string => {
+  if (!globalTextDecoder) {
+    return "";
+  }
+  try {
+    const raw = globalTextDecoder.decode(bytes).replace(/\0+$/g, "");
+    const printable = raw.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+    return printable.trim().length > 0 ? raw.trimEnd() : "";
+  } catch (err) {
+    console.error("⚠️ ASCII decode failed", err);
+    return "";
+  }
+};
+
+const formatBigintContent = (value: bigint): string => {
+  const bytes = new Uint8Array(8);
+  let working = value;
+  for (let cursor = 7; cursor >= 0; cursor--) {
+    bytes[cursor] = Number(working & 0xffn);
+    working >>= 8n;
+  }
+  const decoded = decodeAscii(bytes);
+  if (decoded) {
+    return decoded;
+  }
+  return `0x${value.toString(16).padStart(16, "0")}`;
+};
+
+const convertDecryptedValue = (payload: unknown, contentType?: number): string => {
+  if (typeof payload === "bigint") {
+    if (contentType === 1) {
+      return `0x${payload.toString(16)}`;
+    }
+    return formatBigintContent(payload);
+  }
+  if (typeof payload === "boolean") {
+    return payload ? "true" : "false";
+  }
+  if (typeof payload === "string") {
+    if (!payload) {
+      return "";
+    }
+    if ((contentType === 0 || contentType === undefined) && payload.startsWith("0x")) {
+      try {
+        const ascii = decodeAscii(hexToBytes(payload));
+        return ascii || payload;
+      } catch {
+        return payload;
+      }
+    }
+    return payload;
+  }
+  if (payload == null) {
+    return "";
+  }
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
+};
+
+const toReadableError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+};
+
 export function MessageCard({
   id,
   sender,
@@ -65,10 +165,33 @@ export function MessageCard({
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [localUnlocked, setLocalUnlocked] = useState(unlocked); // Payment sonrası unlock için
   const [localIsRead, setLocalIsRead] = useState(isRead); // Payment sonrası read için
+  const [decryptError, setDecryptError] = useState<string | null>(null);
+  const fhe = useFhe();
   const client = usePublicClient();
   const { address: userAddress } = useAccount();
   const contractAddress = useContractAddress();
   const { chain } = useNetwork();
+
+  const decryptCiphertext = useCallback(async (handleHex: string) => {
+    if (!fhe || typeof fhe.publicDecrypt !== "function") {
+      throw new Error("FHE system is still loading");
+    }
+
+    const sanitized = stripHexPrefix(handleHex);
+    if (!sanitized) {
+      throw new Error("Ciphertext is empty");
+    }
+
+    const bytes = hexToBytes(handleHex);
+    const decryptedResults = await fhe.publicDecrypt([bytes]);
+    const keys = Object.keys(decryptedResults ?? {});
+    if (!keys.length) {
+      throw new Error("Decryption returned no values");
+    }
+
+    const firstKey = keys[0];
+    return convertDecryptedValue(decryptedResults[firstKey], contentType);
+  }, [fhe, contentType]);
   
   // Artık sadece Zama kullanıyoruz
   const isZamaContract = true;
@@ -106,9 +229,12 @@ export function MessageCard({
   useEffect(() => {
     const loadContentIfRead = async () => {
       if (!isRead || isSent || !unlocked || !client || !userAddress || !contractAddress) return;
-      if (messageContent) return; // Zaten yüklenmiş
-      
+      if (messageContent) return;
+      if (!fhe) return;
+
       setIsLoadingContent(true);
+      setDecryptError(null);
+      let ciphertext: string | null = null;
       try {
         const content = await client.readContract({
           address: contractAddress,
@@ -116,21 +242,26 @@ export function MessageCard({
           functionName: "readMessage" as any,
           args: [id],
           account: userAddress as `0x${string}`
-        }) as unknown as bigint; // Zama returns encrypted content
-        
-        // Decrypt content (placeholder - will be replaced with real FHE decryption)
-        const decrypted = '0x' + content.toString(16);
+        }) as unknown as string;
+
+        ciphertext = content;
+        const decrypted = await decryptCiphertext(content);
         setMessageContent(decrypted);
         setIsExpanded(true);
+        setLocalUnlocked(true);
+        setLocalIsRead(true);
       } catch (err) {
         console.error("❌ Content could not be loaded (isRead):", err);
+        const fallback = ciphertext ?? "⚠️ Encrypted payload unavailable";
+        setMessageContent(fallback);
+        setDecryptError(`Unable to decrypt message: ${toReadableError(err)}`);
       } finally {
         setIsLoadingContent(false);
       }
     };
     
     loadContentIfRead();
-  }, [isRead, isSent, unlocked, client, userAddress, id, messageContent, contractAddress]);
+  }, [isRead, isSent, unlocked, client, userAddress, id, messageContent, contractAddress, fhe, decryptCiphertext]);
 
   // readMessage transaction
   const { data: txData, isLoading: isReading, write: readMessage } = useContractWrite({
@@ -147,53 +278,56 @@ export function MessageCard({
   // Transaction başarılı olunca içeriği çek
   useEffect(() => {
     const fetchContent = async () => {
-      if (!isSuccess || !client || !userAddress || !contractAddress) return;
-      
+      if (!isSuccess || !client || !userAddress || !contractAddress || !fhe) return;
+
       setIsLoadingContent(true);
-      
-      // Transaction confirm olduktan sonra biraz bekle
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      setDecryptError(null);
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      let ciphertext: string | null = null;
       try {
-        // readMessage ile içeriği al
         const content = await client.readContract({
           address: contractAddress,
           abi: chronoMessageZamaAbi,
           functionName: "readMessage" as any,
           args: [id],
           account: userAddress as `0x${string}`
-        }) as any;
+        }) as unknown as string;
 
-        // Decrypt (placeholder)
-        const decrypted = '0x' + (content?.toString(16) || 'encrypted');
+        ciphertext = content;
+        const decrypted = await decryptCiphertext(content);
         setMessageContent(decrypted);
         setIsExpanded(true);
+        setLocalIsRead(true);
+        setLocalUnlocked(true);
         onMessageRead?.();
-      } catch (err: any) {
+      } catch (err) {
         console.error("❌ Content could not be fetched:", err);
-        setMessageContent("⚠️ Content could not be loaded. Please refresh the page.");
+        const fallback = ciphertext ?? "⚠️ Content could not be loaded";
+        setMessageContent(fallback);
+        setDecryptError(`Unable to decrypt message: ${toReadableError(err)}`);
       } finally {
         setIsLoadingContent(false);
       }
     };
 
     fetchContent();
-  }, [isSuccess, client, id, onMessageRead, userAddress, contractAddress]);
+  }, [isSuccess, client, id, onMessageRead, userAddress, contractAddress, fhe, decryptCiphertext]);
 
   // Payment success olduğunda içeriği yükle
   useEffect(() => {
     const fetchContentAfterPayment = async () => {
-      if (!isPaymentSuccess || !client || !userAddress || !contractAddress) return;
+      if (!isPaymentSuccess || !client || !userAddress || !contractAddress || !fhe) return;
       
       setIsLoadingContent(true);
-      
-      // Payment başarılı - unlock ve read durumunu güncelle
+      setDecryptError(null);
       setLocalUnlocked(true);
       setLocalIsRead(true);
       
-      // Transaction confirm olduktan sonra biraz bekle
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       
+      let ciphertext: string | null = null;
       try {
         const content = await client.readContract({
           address: contractAddress,
@@ -201,22 +335,25 @@ export function MessageCard({
           functionName: "readMessage" as any,
           args: [id],
           account: userAddress as `0x${string}`
-        }) as any;
+        }) as unknown as string;
 
-        const decrypted = '0x' + (content?.toString(16) || 'encrypted');
+        ciphertext = content;
+        const decrypted = await decryptCiphertext(content);
         setMessageContent(decrypted);
         setIsExpanded(true);
         onMessageRead?.(); // Parent'ı bilgilendir
-      } catch (err: any) {
+      } catch (err) {
         console.error("❌ Content could not be fetched after payment:", err);
-        setMessageContent("⚠️ Content could not be loaded. Please refresh the page.");
+        const fallback = ciphertext ?? "⚠️ Content could not be loaded";
+        setMessageContent(fallback);
+        setDecryptError(`Unable to decrypt message: ${toReadableError(err)}`);
       } finally {
         setIsLoadingContent(false);
       }
     };
 
     fetchContentAfterPayment();
-  }, [isPaymentSuccess, client, id, onMessageRead, userAddress, contractAddress]);
+  }, [isPaymentSuccess, client, id, onMessageRead, userAddress, contractAddress, fhe, decryptCiphertext]);
 
   const handleReadClick = () => {
     if (!localUnlocked) {
@@ -235,6 +372,11 @@ export function MessageCard({
       console.error("❌ readMessage function not available");
       return;
     }
+    if (!fhe || typeof fhe.publicDecrypt !== "function") {
+      setDecryptError("FHE system is still loading. Please try again in a moment.");
+      return;
+    }
+    setDecryptError(null);
     console.log("✅ Reading message...");
     readMessage();
   };
@@ -553,6 +695,11 @@ export function MessageCard({
                 )}
               </div>
             ) : null}
+            {decryptError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-900/20 px-3 py-2 text-xs text-red-200">
+                {decryptError}
+              </div>
+            )}
           </div>
         ) : (
           // Mesaj henüz unlock olmamış

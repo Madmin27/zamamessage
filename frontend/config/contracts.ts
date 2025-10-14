@@ -19,3 +19,8 @@ export const CHRONO_MESSAGE_ZAMA_OLD = {
   address: "0x65016d7E35EC1830d599991d82381bf03eEC2987",
   status: "DEPRECATED - Coprocessor dependency issue"
 };
+
+export const CHRONO_MESSAGE_ZAMA = {
+  address: "0xbD9212F5Df6073a86E6E43813bEDd026C9561468",
+  status: "ACTIVE - Zama Sepolia v3.2"
+};

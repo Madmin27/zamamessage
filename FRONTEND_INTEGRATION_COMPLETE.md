@@ -11,7 +11,7 @@
 
 ```typescript
 // OLD: ChronoMessageZama (coprocessor dependency - FAILS)
-zamaContractAddress: '0x65016d7E35EC1830d599991d82381bf03eEC2987'
+zamaContractAddress: '0xbD9212F5Df6073a86E6E43813bEDd026C9561468'
 
 // NEW: ConfidentialMessage (EmelMarket Pattern - WORKS!)
 zamaContractAddress: '0xB274067B551FaA7c79a146B5215136454aE912bB'

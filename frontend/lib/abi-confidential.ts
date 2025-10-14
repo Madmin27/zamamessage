@@ -59,7 +59,7 @@ export const confidentialMessageAbi = [
   {
     "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
     "name": "readMessage",
-    "outputs": [{ "internalType": "euint64", "name": "content", "type": "uint256" }],  // ✅ CHANGED: euint256 → euint64
+  "outputs": [{ "internalType": "euint64", "name": "content", "type": "bytes32" }],
     "stateMutability": "nonpayable",
     "type": "function"
   },

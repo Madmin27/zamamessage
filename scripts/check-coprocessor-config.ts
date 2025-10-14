@@ -1,7 +1,8 @@
 import { ethers } from "hardhat";
+import zamaDeployment from "../deployments/zama-sepolia.json";
 
 async function main() {
-  const contractAddress = "0x65016d7E35EC1830d599991d82381bf03eEC2987";
+  const contractAddress = zamaDeployment.address;
   
   console.log("\n🔍 Checking FHEVM Coprocessor Configuration...");
   console.log("Contract Address:", contractAddress);
@@ -21,7 +22,7 @@ async function main() {
   console.log("\n🔎 Checking if contract has coprocessor config...");
   
   const ChronoMessageZama = await ethers.getContractFactory("ChronoMessageZama");
-  const contract = ChronoMessageZama.attach(contractAddress);
+  const contract = ChronoMessageZama.attach(contractAddress) as any;
   
   // Check if contract is instance of SepoliaConfig
   try {

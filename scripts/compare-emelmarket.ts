@@ -1,4 +1,5 @@
 import { ethers } from "hardhat";
+import zamaDeployment from "../deployments/zama-sepolia.json";
 
 async function main() {
     console.log("🔍 Comparing EmelMarket contracts with ours...\n");
@@ -12,7 +13,7 @@ async function main() {
     console.log("📦 FHEEmelMarket bytecode length:", marketCode.length);
     
     // Bizim kontratımız
-    const ourCode = await ethers.provider.getCode("0x65016d7E35EC1830d599991d82381bf03eEC2987");
+    const ourCode = await ethers.provider.getCode(zamaDeployment.address);
     console.log("📦 ChronoMessageZama bytecode length:", ourCode.length);
     
     // Zama Coprocessor (karşılaştırma için)

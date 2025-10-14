@@ -2,14 +2,28 @@
   "network": "sepolia",
   "version": "zama",
   "contractName": "ChronoMessageZama",
-  "address": "0x65016d7E35EC1830d599991d82381bf03eEC2987",
-  "deployedAt": "2025-10-12T20:19:13.263Z",
+  "address": "0xbD9212F5Df6073a86E6E43813bEDd026C9561468",
+  "deployedAt": "2025-10-14T13:24:14.694Z",
   "deployedBy": "0xF6D39Dda8997407110264acEc6a24345834cB639",
   "chainId": 11155111,
+  "transactionHash": "0x2301de5559fc02a10ff75dc00a01ce9cc97c851e68fb0181ea23d29f83429004",
+  "blockNumber": 9410231,
+  "gasUsed": "827663",
   "features": [
     "FHE",
     "TIME_LOCK",
     "ENCRYPTED_CONTENT"
   ],
-  "abi": "See artifacts/contracts/ChronoMessageZama.sol/ChronoMessageZama.json"
+  "abi": "See artifacts/contracts/ChronoMessageZama.sol/ChronoMessageZama.json",
+  "protocolId": "10001",
+  "fheSettings": {
+    "aclContractAddress": "0x687820221192C5B662b25367F70076A37bc79b6c",
+    "kmsContractAddress": "0x1364cBBf2cDF5032C47d8226a6f6FBD2AFCDacAC",
+    "inputVerifierContractAddress": "0xbc91f3daD1A5F19F8390c400196e58073B6a0BC4",
+    "verifyingContractAddressDecryption": "0xb6E160B1ff80D67Bfe90A85eE06Ce0A2613607D1",
+    "verifyingContractAddressInputVerification": "0x7048C39f048125eDa9d678AEbaDfB22F7900a29F",
+    "gatewayChainId": 55815,
+    "relayerUrl": "https://relayer.testnet.zama.cloud",
+    "networkRpc": "https://eth-sepolia.public.blastapi.io"
+  }
 }

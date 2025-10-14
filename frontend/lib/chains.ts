@@ -33,7 +33,7 @@ export const supportedChains: Record<string, ChainDefinition> = {
       infura: 'https://sepolia.infura.io/v3/e6aecc89c96940a5a671b2ad96afe68a'
     },
     blockExplorer: 'https://sepolia.etherscan.io',
-    zamaContractAddress: '0x07b4314c9cC7478F665416425d8d5B80Ba610eB1', // ✅ V2: euint64 (EmelMarket pattern)
+    zamaContractAddress: '0xbD9212F5Df6073a86E6E43813bEDd026C9561468', // ✅ ChronoMessageZama (Sepolia)
     faucet: 'https://sepoliafaucet.com/'
   },
   baseSepolia: {

@@ -4,6 +4,9 @@
 # Bu script tüm gerekli bilgileri toplar ve bir rapor dosyası oluşturur
 
 OUTPUT_FILE="zama-support-report-$(date +%Y%m%d-%H%M%S).txt"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+CONFIDENTIAL_ADDRESS=$(node -e "console.log(require('${SCRIPT_DIR}/deployments/confidential-message-sepolia.json').address)" 2>/dev/null)
+CHRONO_ADDRESS=$(node -e "console.log(require('${SCRIPT_DIR}/deployments/zama-sepolia.json').address)" 2>/dev/null)
 
 echo "🔍 Zama Destek Raporu Oluşturuluyor..."
 echo ""
@@ -24,14 +27,14 @@ echo ""
   echo "Network: Sepolia Testnet (Chain ID: 11155111)"
   echo ""
   echo "Deploy Edilen Sözleşmeler:"
-  echo "  - ConfidentialMessage: 0x38756CCb09EE1719089F370a8386a772a8F7B5cf"
-  echo "  - ChronoMessageZama:   0x65016d7E35EC1830d599991d82381bf03eEC2987"
+  echo "  - ConfidentialMessage: ${CONFIDENTIAL_ADDRESS:-unknown}"
+  echo "  - ChronoMessageZama:   ${CHRONO_ADDRESS:-unknown}"
   echo ""
   echo "Deployer Address: 0xF6D39Dda8997407110264acEc6a24345834cB639"
   echo ""
   echo "Etherscan Links:"
-  echo "  https://sepolia.etherscan.io/address/0x38756CCb09EE1719089F370a8386a772a8F7B5cf"
-  echo "  https://sepolia.etherscan.io/address/0x65016d7E35EC1830d599991d82381bf03eEC2987"
+  echo "  https://sepolia.etherscan.io/address/${CONFIDENTIAL_ADDRESS:-0x0000000000000000000000000000000000000000}"
+  echo "  https://sepolia.etherscan.io/address/${CHRONO_ADDRESS:-0x0000000000000000000000000000000000000000}"
   echo ""
 
   echo "============================================================"
@@ -146,7 +149,7 @@ echo ""
   echo "❓ Sorular:"
   echo ""
   echo "1. Sözleşmemiz relayer'a kayıtlı mı?"
-  echo "   - Contract: 0x38756CCb09EE1719089F370a8386a772a8F7B5cf"
+  echo "   - Contract: ${CONFIDENTIAL_ADDRESS:-unknown}"
   echo ""
   echo "2. ACL izinleri verilmiş mi?"
   echo "   - Deployer: 0xF6D39Dda8997407110264acEc6a24345834cB639"
