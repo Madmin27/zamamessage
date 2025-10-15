@@ -1,14 +1,12 @@
 Kesinlikle zama FHE kullanılarak EVM ağlarında şifreli mesaj göndermeye çalışacağız.
+Başka şifrelemler ile bypass yapma
 Öncelikle sadece sepolia ağında yapacağız
 
 Farklı test ve mainnet ağlar için de ekleyelim. Base öncelikli
  
 Bir nft satılmışsa ve hangi cüzdandaysa, ona açılan mesaj
 
-npx hardhat compile
-cache temizle, 
 
-rebuild et, restart et
 
 https://github.com/zama-ai/fhevm 
  burada  nasıl
@@ -21,9 +19,30 @@ https://docs.zama.ai/protocol/relayer-sdk-guides
 https://github.com/Madmin27/open-nft-marketplace
 
 
-cache temizliği, rebuil ve 
- sudo systemctl restart sealedmessage-frontend && sleep 3 && sudo systemctl status sealedmessage-frontend
 
+npx hardhat compile
+
+npm run build
+cd /root/zamamessage && rm -rf .next node_modules/.cache frontend/.next frontend/node_modules/.cache
+cd /root/zamamessage/frontend && npm install
+cd /root/zamamessage/frontend && npm run build
+sudo systemctl restart sealedmessage-frontend 
+
+gerekiyorsa cache temizliği, rebuilt ve 
+ sudo systemctl restart sealedmessage-frontend 
+ 
+ && sleep 3 && sudo systemctl status sealedmessage-frontend
+
+
+grep -EHrn "0x50587bC2bef7C66bC2952F126ADbafCc4Ab9c9D0" .
+
+grep -EHrn "Heads-up: Zama relayer fees" . --exclude-dir=./.next/cache
+grep -EHrn "unitPrice" . --exclude-dir=var --exclude=*.js
+grep -EHrn "https://hepsiantep\.com" .
+grep -EHrn "http://54\.38\.239\.188" . # Kendi IP adresiniz
+
+grep -EHrn "admin58" . --exclude-dir=var
+grep -EHrn "product-price" . --include=\*.js --exclude-dir=./.next/cache
 
  Not: 
 ### Zama Sepolia FHE Gönderim Planı

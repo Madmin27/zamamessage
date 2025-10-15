@@ -324,10 +324,24 @@ export function MessageList({ refreshKey }: MessageListProps) {
     }
     return new Set();
   });
+  const AUTO_REFRESH_SECONDS = 300;
+  const [autoRefreshSecondsLeft, setAutoRefreshSecondsLeft] = useState<number>(AUTO_REFRESH_SECONDS);
+  const autoRefreshLabel = useMemo(() => {
+    const minutes = Math.floor(autoRefreshSecondsLeft / 60);
+    const seconds = autoRefreshSecondsLeft % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }, [autoRefreshSecondsLeft]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Save hidden messages to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hiddenMessages', JSON.stringify(Array.from(hiddenMessages)));
+    }
+  }, [hiddenMessages]);
 
   // Toast bildirimi göster
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' = 'info') => {
@@ -345,6 +359,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
 
     setLoading(true);
     setError(null);
+    setAutoRefreshSecondsLeft(AUTO_REFRESH_SECONDS);
 
     try {
       // Zama contract için farklı yükleme stratejisi
@@ -405,6 +420,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
           console.log(`✅ Loaded ${allMessages.length} Zama messages`);
           setItems(allMessages);
           setLastUpdated(new Date());
+          setAutoRefreshSecondsLeft(AUTO_REFRESH_SECONDS);
         } catch (err) {
           console.error('❌ Error loading Zama messages:', err);
           setError('Failed to load messages');
@@ -425,7 +441,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
     } finally {
       setLoading(false);
     }
-  }, [client, hasContract, contractAddress, userAddress, unlockedMessageIds, showToast]);
+  }, [client, hasContract, contractAddress, userAddress, unlockedMessageIds, showToast, AUTO_REFRESH_SECONDS]);
 
   useEffect(() => {
     if (mounted && client && hasContract && contractAddress && userAddress) {
@@ -433,16 +449,25 @@ export function MessageList({ refreshKey }: MessageListProps) {
     }
   }, [refreshKey, mounted, client, hasContract, contractAddress, userAddress, loadMessages]);
 
-  // Otomatik yenileme (30 saniyede bir unlock kontrolü)
   useEffect(() => {
-    if (!mounted || !client || !hasContract || !contractAddress || !userAddress) return;
-    
-    const interval = setInterval(() => {
-      loadMessages();
-    }, 300000); // 5 dakika (300000 ms)
+    if (!mounted || !client || !hasContract || !contractAddress || !userAddress) {
+      return;
+    }
 
-    return () => clearInterval(interval);
-  }, [mounted, client, hasContract, contractAddress, userAddress, loadMessages]);
+    const intervalId = window.setInterval(() => {
+      setAutoRefreshSecondsLeft((prev) => {
+        if (prev <= 1) {
+          void loadMessages();
+          return AUTO_REFRESH_SECONDS;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [mounted, client, hasContract, contractAddress, userAddress, loadMessages, AUTO_REFRESH_SECONDS]);
 
   if (!mounted) {
     return (
@@ -522,7 +547,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          {loading ? "⟳" : "Refresh"}
+          {loading ? "⟳" : `Refresh (auto in ${autoRefreshLabel})`}
         </button>
       </div>
 
@@ -554,7 +579,6 @@ export function MessageList({ refreshKey }: MessageListProps) {
             {filterOption === 'pending' && '⏳ Pending'}
             {filterOption === 'paid' && '✅ Paid'}
             {filterOption === 'unpaid' && '❌ Unpaid'}
-            {filterOption === 'files' && '📎 Files'}
             {filterOption === 'files' && '📎 Files'}
           </button>
         ))}
@@ -615,6 +639,10 @@ export function MessageList({ refreshKey }: MessageListProps) {
               if (filter === 'files') return item.contentType === 1;
               
               return true;
+            })
+            .sort((a, b) => {
+              // Sort by message ID descending (newest first)
+              return Number(b.id) - Number(a.id);
             })
             .map((item, index) => {
             // Safeguard: undefined değerleri kontrol et (0n geçerli!)

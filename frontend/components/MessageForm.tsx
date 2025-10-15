@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState, useRef } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState, useRef, useCallback } from "react";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -8,7 +8,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork, usePublicClient } from "wagmi";
 import { confidentialMessageAbi } from "../lib/abi-confidential"; // ✅ NEW: EmelMarket Pattern ABI
 import { appConfig } from "../lib/env";
-import { isAddress } from "viem";
+import { decodeEventLog, isAddress } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 // EMELMARKET PATTERN - Using useFhe hook
 import { useFhe } from "./FheProvider";
@@ -18,6 +18,27 @@ dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
 const DEFAULT_RECEIVER = "0x50587bC2bef7C66bC2952F126ADbafCc4Ab9c9D0" as const;
+
+const SHORT_HASH_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const SHORT_HASH_LENGTH = 6;
+
+const generateShortHash = () => {
+  let result = "";
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const randomBytes = new Uint8Array(SHORT_HASH_LENGTH);
+    crypto.getRandomValues(randomBytes);
+    for (let i = 0; i < SHORT_HASH_LENGTH; i++) {
+      const index = randomBytes[i] % SHORT_HASH_ALPHABET.length;
+      result += SHORT_HASH_ALPHABET[index];
+    }
+  } else {
+    for (let i = 0; i < SHORT_HASH_LENGTH; i++) {
+      const index = Math.floor(Math.random() * SHORT_HASH_ALPHABET.length);
+      result += SHORT_HASH_ALPHABET[index];
+    }
+  }
+  return result;
+};
 
 const toHex = (input: string | Uint8Array | number[] | undefined): `0x${string}` => {
   if (!input) {
@@ -56,7 +77,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [receiver, setReceiver] = useState<string>(DEFAULT_RECEIVER);
   const [content, setContent] = useState("");
   const [unlockMode, setUnlockMode] = useState<"preset" | "custom">("preset");
-  const [presetDuration, setPresetDuration] = useState<number>(10); // 10 saniye
+  const [presetDuration, setPresetDuration] = useState<number>(300); // 5 dakika varsayılan
   const [unlock, setUnlock] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -70,16 +91,22 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [ipfsHash, setIpfsHash] = useState<string>("");
   const [uploadingFile, setUploadingFile] = useState(false);
   const [contentType, setContentType] = useState<0 | 1>(0); // 0=TEXT, 1=IPFS_HASH
+  const [metadataHash, setMetadataHash] = useState<string>(""); // Full metadata IPFS hash
+  const [metadataShortHash, setMetadataShortHash] = useState<string>(""); // 6-char reference stored on-chain
+  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [attachmentPreviewMime, setAttachmentPreviewMime] = useState<string>("image/webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastPersistedHashRef = useRef<string | null>(null);
+  const [plannedUnlockTimestamp, setPlannedUnlockTimestamp] = useState<number>(() => Math.floor(Date.now() / 1000) + 300);
   
   // Zama FHE state
   const [fheInstance, setFheInstance] = useState<any>(null);
-  const [encryptedData, setEncryptedData] = useState<{ handles: string[]; inputProof: string } | null>(null);
+  const [encryptedData, setEncryptedData] = useState<{ handles: string[]; inputProof: string; metadataHash?: string; metadataShortHash?: string } | null>(null);
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [fheInitialized, setFheInitialized] = useState(false); // Track if FHE was initialized
   const [chainTimestamp, setChainTimestamp] = useState<number | null>(null);
   const [txUnlockTime, setTxUnlockTime] = useState<number | null>(null);
-  const UNLOCK_BUFFER_SECONDS = 900; // Keep unlock time at least 15 minutes ahead of the chain
+  const UNLOCK_BUFFER_SECONDS = 0; // No forced buffer - use user's exact time selection
 
   const computeSafeUnlockTime = (
     chainSeconds: number | null,
@@ -91,15 +118,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     const sanitizedDesired = typeof desiredSeconds === "number" && Number.isFinite(desiredSeconds)
       ? desiredSeconds
       : nowSeconds;
-    const sanitizedChain = typeof chainSeconds === "number" && Number.isFinite(chainSeconds)
-      ? chainSeconds
-      : nowSeconds;
-    const chainBuffered = sanitizedChain + UNLOCK_BUFFER_SECONDS;
-    const baseline = Math.max(sanitizedDesired, chainBuffered);
-    if (!includeWallClock) {
-      return baseline;
-    }
-    return Math.max(baseline, nowSeconds + UNLOCK_BUFFER_SECONDS);
+    // Just return the desired time - no forced buffer
+    return sanitizedDesired;
   };
   
   // Form validation state
@@ -122,6 +142,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     const formatted = `${year}-${month}-${day}T${hours}:${minutes}`;
     
     setUnlock(formatted);
+    setPlannedUnlockTimestamp(Math.floor(Date.now() / 1000) + presetDuration);
     // Kullanıcının timezone'unu al
     setUserTimezone(dayjs.tz.guess());
     
@@ -160,27 +181,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       clearInterval(intervalId);
     };
   }, [publicClient]);
-
-  // Unlock timestamp hesaplama (preset veya custom)
-  const unlockTimestamp = useMemo(() => {
-    if (unlockMode === "preset") {
-      return Math.floor(Date.now() / 1000) + presetDuration;
-    }
-    // Custom mode: kullanıcının seçtiği timezone'da parse et
-    if (!unlock) return Math.floor(Date.now() / 1000); // Boş ise şu an
-    
-    try {
-      const parsed = dayjs.tz(unlock, selectedTimezone);
-      if (!parsed.isValid()) {
-        console.warn("Geçersiz tarih:", unlock);
-        return Math.floor(Date.now() / 1000);
-      }
-      return parsed.unix();
-    } catch (err) {
-      console.error("Tarih parse hatası:", err);
-      return Math.floor(Date.now() / 1000);
-    }
-  }, [unlockMode, presetDuration, unlock, selectedTimezone]);
 
   // Lazy FHE Initialization - using proven fhevmjs SDK
   const initializeFHE = async () => {
@@ -233,14 +233,150 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     console.log("  User Address (msg.sender):", userAddress);
     console.log("  ⚠️ IMPORTANT: inputProof will be valid ONLY for this userAddress!");
 
-    // Şifrelenecek veri: Mesaj varsa mesaj, yoksa IPFS hash
-    const dataToEncrypt = content.trim() || ipfsHash;
+  // Şifrelenecek veri: 
+  // 1. Eğer dosya varsa: Metadata IPFS'e yükle → short hash şifrele
+  // 2. Eğer sadece mesaj varsa: mesaj metni (max 8 char için uyar)
+  let dataToEncrypt = "";
+  let uploadedMetadataHash = ""; // Track metadata hash for return
+  let resolvedShortHash = metadataShortHash; // Track short hash for return
+    
+    if (ipfsHash && attachedFile) {
+      let shortHash = metadataShortHash;
+      if (!shortHash) {
+        shortHash = generateShortHash();
+        setMetadataShortHash(shortHash);
+        console.log("🆔 Generated short hash inside encryptContent:", shortHash);
+      }
+      resolvedShortHash = shortHash;
+
+      // Dosya metadata'sını IPFS'e yükle
+      const fileData = {
+        type: "file",
+        ipfs: ipfsHash,
+        name: attachedFile.name,
+        size: attachedFile.size,
+        mimeType: attachedFile.type,
+        message: content.trim() || "",
+        shortHash
+      };
+      
+      console.log("📎 Uploading file metadata to IPFS...", fileData);
+      
+      // Metadata'yı IPFS'e yükle
+      const metadataJson = JSON.stringify(fileData);
+      const metadataBlob = new Blob([metadataJson], { type: 'application/json' });
+      const metadataFile = new File([metadataBlob], 'metadata.json', { type: 'application/json' });
+      
+      const formData = new FormData();
+      formData.append("file", metadataFile);
+      formData.append("pinataMetadata", JSON.stringify({
+        name: `message-meta-${shortHash}`,
+        keyvalues: {
+          shortHash,
+          type: "message-metadata"
+        }
+      }));
+      
+      const pinataApiKey = process.env.NEXT_PUBLIC_PINATA_API_KEY;
+      const pinataSecretKey = process.env.NEXT_PUBLIC_PINATA_SECRET_KEY;
+      
+      if (!pinataApiKey || !pinataSecretKey) {
+        throw new Error("IPFS credentials not configured");
+      }
+      
+      const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+        method: "POST",
+        headers: {
+          pinata_api_key: pinataApiKey,
+          pinata_secret_api_key: pinataSecretKey,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error("Metadata upload failed");
+      }
+      
+      const data = await response.json();
+      const metadataHashValue = data.IpfsHash;
+      
+      console.log("✅ Metadata uploaded to IPFS:", metadataHashValue);
+      console.log("📦 Full metadata:", fileData);
+      console.log("🔗 Metadata URL:", `https://gateway.pinata.cloud/ipfs/${metadataHashValue}`);
+      
+      // Save mapping to localStorage for cross-device access
+      const mappingKey = `file-metadata-${shortHash}`;
+      try {
+        localStorage.setItem(mappingKey, metadataHashValue);
+        console.log(`💾 Saved mapping: ${mappingKey} → ${metadataHashValue}`);
+      } catch (err) {
+        console.warn("⚠️ Failed to save metadata mapping to localStorage:", err);
+      }
+
+      // Notify backend mapping service
+      try {
+        const response = await fetch("/api/metadata-mapping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shortHash,
+            fullHash: metadataHashValue,
+            fileName: attachedFile.name,
+            fileSize: attachedFile.size,
+            mimeType: attachedFile.type
+          })
+        });
+
+        if (!response.ok) {
+          console.warn("⚠️ Backend mapping POST failed:", response.status, response.statusText);
+        }
+      } catch (err) {
+        console.warn("⚠️ Failed to call metadata mapping API:", err);
+      }
+      
+      // State'e kaydet
+      setMetadataHash(metadataHashValue);
+      uploadedMetadataHash = metadataHashValue; // Save for return value
+
+      // Debug: append to msg-debug-log
+      try {
+        const entry = {
+          ts: Date.now(),
+          type: 'sent-metadata-upload',
+          shortHash,
+          metadataHashValue,
+          fileName: attachedFile.name,
+        };
+        const existing = JSON.parse(localStorage.getItem('msg-debug-log') || '[]');
+        existing.push(entry);
+        localStorage.setItem('msg-debug-log', JSON.stringify(existing));
+        console.log('🐛 Debug saved (sent-metadata-upload):', entry);
+      } catch (e) {
+        console.warn('Failed to write debug log:', e);
+      }
+      
+  // Şifrelenecek veri: "F:" + shortHash (8 byte total)
+  dataToEncrypt = `F:${shortHash}`;
+      
+  console.log("🔐 Data to encrypt:", dataToEncrypt);
+  console.log("📝 Short hash:", shortHash);
+  console.log("💾 Full metadata hash saved to state:", metadataHashValue);
+    } else {
+      // Sadece mesaj (max 8 char warning)
+      dataToEncrypt = content.trim();
+      if (dataToEncrypt.length > 8) {
+        console.warn("⚠️ Message truncated to 8 characters for euint64");
+        dataToEncrypt = dataToEncrypt.substring(0, 8);
+      }
+      console.log("📝 Encrypting text message");
+    }
+    
     if (!dataToEncrypt) {
       throw new Error("No content to encrypt");
     }
 
     console.log("🔐 Starting encryption with FHE SDK (EmelMarket pattern)...");
-    console.log("📝 Data to encrypt:", dataToEncrypt.substring(0, 50));
+    console.log("📝 Data to encrypt:", dataToEncrypt);
     
     // Convert content to BigInt (64-bit for euint64)
     const encoder = new TextEncoder();
@@ -275,24 +411,118 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
     return {
       handles: [handleHex],
-      inputProof: proofHex
+      inputProof: proofHex,
+      metadataHash: uploadedMetadataHash, // Return metadata hash if file was uploaded
+      metadataShortHash: resolvedShortHash
     };
   };
 
   // Form validation
   useEffect(() => {
     let valid = false;
-    
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const customValid = unlockMode === "custom"
+      ? (() => {
+          try {
+            const parsed = dayjs.tz(unlock, selectedTimezone);
+            return parsed.isValid() && parsed.unix() > nowSeconds;
+          } catch {
+            return false;
+          }
+        })()
+      : true;
+
     // Base validations - NO encryption check (will encrypt on submit)
     valid = isConnected &&
       !!receiver &&
       isAddress(receiver) &&
       receiver.toLowerCase() !== userAddress?.toLowerCase() &&
       (content.trim().length > 0 || ipfsHash.length > 0) && // Mesaj VEYA dosya olmalı
-      unlockTimestamp > Math.floor(Date.now() / 1000); // Future time
+      plannedUnlockTimestamp > nowSeconds &&
+      customValid;
     
     setIsFormValid(valid);
-  }, [isConnected, receiver, userAddress, content, ipfsHash, unlockTimestamp]);
+  }, [
+    isConnected,
+    receiver,
+    userAddress,
+    content,
+    ipfsHash,
+    plannedUnlockTimestamp,
+    unlockMode,
+    unlock,
+    selectedTimezone
+  ]);
+  
+  const generateAttachmentPreview = useCallback((file: File): Promise<string | null> => {
+    if (!file.type.startsWith("image/")) {
+      return Promise.resolve(null);
+    }
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => resolve(null);
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+
+          const CANVAS_SIZE = 56;
+          canvas.width = CANVAS_SIZE;
+          canvas.height = CANVAS_SIZE;
+
+          const scale = Math.min(CANVAS_SIZE / img.width, CANVAS_SIZE / img.height);
+          const drawWidth = Math.max(1, img.width * scale);
+          const drawHeight = Math.max(1, img.height * scale);
+          const dx = (CANVAS_SIZE - drawWidth) / 2;
+          const dy = (CANVAS_SIZE - drawHeight) / 2;
+
+          ctx.fillStyle = "#0f172a"; // midnight background
+          ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+          ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
+
+          try {
+            const dataUrl = canvas.toDataURL("image/webp", 0.65);
+            resolve(dataUrl);
+          } catch (err) {
+            console.warn("Preview generation failed", err);
+            resolve(null);
+          }
+        };
+
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+  
+  useEffect(() => {
+    if (unlockMode !== "custom") {
+      return;
+    }
+    if (!unlock) {
+      return;
+    }
+
+    try {
+      const parsed = dayjs.tz(unlock, selectedTimezone);
+      if (!parsed.isValid()) {
+        return;
+      }
+      const unix = parsed.unix();
+      if (unix !== plannedUnlockTimestamp) {
+        setPlannedUnlockTimestamp(unix);
+      }
+    } catch (err) {
+      console.warn("⚠️ Unable to parse custom unlock", err);
+    }
+  }, [unlockMode, unlock, selectedTimezone, plannedUnlockTimestamp]);
   
   // Dosya yükleme fonksiyonu (IPFS - şu an kullanılmıyor)
   const handleFileSelect = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -344,8 +574,29 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return;
     }
     
+    const generatedShortHash = generateShortHash();
+    setMetadataShortHash(generatedShortHash);
+    console.log("🆔 Generated short hash for attachment:", generatedShortHash);
     setAttachedFile(file);
     setError(null);
+
+    if (file.type.startsWith('image/')) {
+      generateAttachmentPreview(file)
+        .then((preview) => {
+          if (preview) {
+            setAttachmentPreview(preview);
+            setAttachmentPreviewMime("image/webp");
+          } else {
+            setAttachmentPreview(null);
+          }
+        })
+        .catch((err) => {
+          console.warn("⚠️ Unable to generate preview", err);
+          setAttachmentPreview(null);
+        });
+    } else {
+      setAttachmentPreview(null);
+    }
     
     // IPFS'e yükle
     await uploadToIPFS(file);
@@ -401,7 +652,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       const errorMsg = err instanceof Error ? err.message : "Upload failed";
       setError(`IPFS Upload Error: ${errorMsg}`);
       setAttachedFile(null);
+      setMetadataShortHash("");
       setIpfsHash("");
+      setAttachmentPreview(null);
+      setAttachmentPreviewMime("image/webp");
     } finally {
       setUploadingFile(false);
     }
@@ -409,9 +663,12 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   
   const removeAttachment = () => {
     setAttachedFile(null);
+    setMetadataShortHash("");
     setIpfsHash("");
     setContentType(0); // TEXT
     setContent(""); // İçeriği temizle
+    setAttachmentPreview(null);
+    setAttachmentPreviewMime("image/webp");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -499,7 +756,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     if (!mounted) return { local: "", utc: "", relative: "", selected: "" };
     
     try {
-      const activeUnlock = txUnlockTime ?? unlockTimestamp;
+      const activeUnlock = txUnlockTime ?? plannedUnlockTimestamp;
       const timestamp = activeUnlock * 1000;
       const localTime = dayjs(timestamp).format("DD MMM YYYY, HH:mm");
       const utcTime = dayjs(timestamp).utc().format("DD MMM YYYY, HH:mm");
@@ -511,27 +768,146 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       console.error("Tarih display hatası:", err);
       return { local: "---", utc: "---", selected: "---", relative: "---" };
     }
-  }, [unlockTimestamp, mounted, selectedTimezone, txUnlockTime]);
+  }, [plannedUnlockTimestamp, mounted, selectedTimezone, txUnlockTime]);
 
   useEffect(() => {
-    if (isSuccess) {
+    if (!isSuccess) {
+      return;
+    }
+
+    const txHash = data?.hash ?? null;
+    if (txHash && lastPersistedHashRef.current === txHash) {
+      return;
+    }
+    if (txHash) {
+      lastPersistedHashRef.current = txHash;
+    }
+
+    let cancelled = false;
+
+    const persistAndReset = async () => {
       console.log("✅ MessageForm: Message sent successfully");
+
+      const hashToSave = encryptedData?.metadataHash || metadataHash;
+      const shortHashToSave = encryptedData?.metadataShortHash || metadataShortHash || (hashToSave ? hashToSave.substring(0, 6) : "");
+      if (hashToSave && shortHashToSave) {
+        const mappingKey = `file-metadata-${shortHashToSave}`;
+        localStorage.setItem(mappingKey, hashToSave);
+        console.log(`💾 Saved metadata mapping: ${shortHashToSave} → ${hashToSave}`);
+      }
+
+      const latestAttachment = attachedFile;
+      const latestShortHash = encryptedData?.metadataShortHash || metadataShortHash;
+
+  if (attachmentPreview && publicClient && txHash) {
+        try {
+          const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+          let messageId: string | undefined;
+          for (const log of receipt.logs) {
+            if (contractAddress && log.address?.toLowerCase() !== contractAddress.toLowerCase()) {
+              continue;
+            }
+            try {
+              const decoded = decodeEventLog({
+                abi: confidentialMessageAbi,
+                data: log.data,
+                topics: log.topics
+              });
+              if (decoded.eventName === "MessageSent") {
+                const rawId = decoded.args?.messageId as bigint | string | undefined;
+                if (rawId !== undefined && rawId !== null) {
+                  messageId = typeof rawId === "bigint" ? rawId.toString() : String(rawId);
+                  break;
+                }
+              }
+            } catch (err) {
+              // Log decode might fail for unrelated events; ignore silently.
+            }
+          }
+
+          if (messageId) {
+            const previewPayload = {
+              messageId,
+              previewDataUrl: attachmentPreview,
+              mimeType: attachmentPreviewMime,
+              shortHash: latestShortHash ?? null,
+              fileName: latestAttachment?.name ?? null
+            };
+
+            const response = await fetch("/api/message-preview", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(previewPayload)
+            });
+            if (!response.ok) {
+              console.warn(
+                "⚠️ Preview store responded with",
+                response.status,
+                response.statusText
+              );
+            } else {
+              console.log("🖼️ Stored preview for message", messageId);
+            }
+          }
+        } catch (err) {
+          console.warn("⚠️ Failed to persist preview", err);
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
       setReceiver(DEFAULT_RECEIVER);
       setContent("");
       setAttachedFile(null);
+      setAttachmentPreview(null);
+      setAttachmentPreviewMime("image/webp");
       setIpfsHash("");
+      setMetadataHash("");
+      setMetadataShortHash("");
       setContentType(0);
-      setEncryptedData(null); // Clear encrypted data
-    setTxUnlockTime(null);
+  setPresetDuration(300);
+  setUnlockMode("preset");
+  setIsPresetsOpen(false);
+  const resetLocal = new Date();
+  const resetYear = resetLocal.getFullYear();
+  const resetMonth = String(resetLocal.getMonth() + 1).padStart(2, '0');
+  const resetDay = String(resetLocal.getDate()).padStart(2, '0');
+  const resetHours = String(resetLocal.getHours()).padStart(2, '0');
+  const resetMinutes = String(resetLocal.getMinutes()).padStart(2, '0');
+  const resetFormatted = `${resetYear}-${resetMonth}-${resetDay}T${resetHours}:${resetMinutes}`;
+  setUnlock(resetFormatted);
+  const defaultPlanned = Math.floor(Date.now() / 1000) + 300;
+  setPlannedUnlockTimestamp(defaultPlanned);
+      setEncryptedData(null);
+      setTxUnlockTime(null);
       setError(null);
       setSuccessToast(true);
       setTimeout(() => setSuccessToast(false), 5000);
-      // setTimeout ile callback'i ayır
       setTimeout(() => {
         onSubmitted?.();
       }, 100);
-    }
-  }, [isSuccess]); // onSubmitted'ı bağımlılıklardan kaldırdık
+    };
+
+    void persistAndReset();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isSuccess,
+    encryptedData,
+    metadataHash,
+    metadataShortHash,
+    attachmentPreview,
+    attachmentPreviewMime,
+    publicClient,
+    data?.hash,
+    contractAddress,
+    attachedFile,
+    onSubmitted
+  ]);
 
   // Auto-send transaction after encryption completes AND write is ready
   useEffect(() => {
@@ -576,12 +952,29 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       return;
     }
     
-    // Time validation
-    if (unlockMode === "custom" && !dayjs(unlock).isValid()) {
-      setError("Please select a valid date.");
-      return;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    let desiredUnlock = plannedUnlockTimestamp;
+
+    if (unlockMode === "preset") {
+      desiredUnlock = nowSeconds + presetDuration;
+      setPlannedUnlockTimestamp(desiredUnlock);
+    } else {
+      try {
+        const parsed = dayjs.tz(unlock, selectedTimezone);
+        if (!parsed.isValid()) {
+          setError("Please select a valid date.");
+          return;
+        }
+        desiredUnlock = parsed.unix();
+        setPlannedUnlockTimestamp(desiredUnlock);
+      } catch (err) {
+        console.warn("Invalid custom date", err);
+        setError("Please select a valid date.");
+        return;
+      }
     }
-    if (unlockTimestamp <= Math.floor(Date.now() / 1000)) {
+
+    if (desiredUnlock <= nowSeconds) {
       setError("Unlock time must be in the future.");
       return;
     }
@@ -612,11 +1005,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         }
       }
 
-      const safeUnlockForTx = computeSafeUnlockTime(latestChainTimestamp ?? chainTimestamp, unlockTimestamp);
+      const safeUnlockForTx = computeSafeUnlockTime(latestChainTimestamp ?? chainTimestamp, desiredUnlock);
       setTxUnlockTime(safeUnlockForTx);
 
       console.log("⏱️ Unlock time prepared", {
-        userSelected: unlockTimestamp,
+        userSelected: desiredUnlock,
         chainBase: latestChainTimestamp ?? chainTimestamp,
         enforcedUnlock: safeUnlockForTx,
         bufferSeconds: UNLOCK_BUFFER_SECONDS
@@ -637,12 +1030,40 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       console.log("🔐 Encrypting content...");
       const encrypted = await encryptContent(instance as any);
       setEncryptedData(encrypted);
+      // Debug: save encrypted payload entry
+      try {
+        const entry = {
+          ts: Date.now(),
+          type: 'sent-encrypted-complete',
+          handles: encrypted.handles,
+          proof: encrypted.inputProof,
+          metadataHash: encrypted.metadataHash,
+          metadataShortHash: encrypted.metadataShortHash
+        };
+        const existing = JSON.parse(localStorage.getItem('msg-debug-log') || '[]');
+        existing.push(entry);
+        localStorage.setItem('msg-debug-log', JSON.stringify(existing));
+        console.log('🐛 Debug saved (sent-encrypted-complete):', entry);
+      } catch (e) {
+        console.warn('Failed to write debug log (sent-encrypted-complete):', e);
+      }
+      
+      // Eğer dosya varsa metadata hash'i de kaydet
+      if (encrypted.metadataHash) {
+        setMetadataHash(encrypted.metadataHash);
+        console.log("💾 Metadata hash set to state:", encrypted.metadataHash);
+      }
+      if (encrypted.metadataShortHash) {
+        setMetadataShortHash(encrypted.metadataShortHash);
+        console.log("🔖 Short hash set to state:", encrypted.metadataShortHash);
+      }
+      
       setIsEncrypting(false);
       
       console.log("✅ Encryption complete! Waiting for transaction to auto-send...");
       setError(null); // Clear error - success status will show in separate indicator
       
-    } catch (err) {
+  } catch (err) {
       console.error("❌ Error:", err);
       setError(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsEncrypting(false);
@@ -715,7 +1136,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           </p>
         </div>
       )}
-      <div className="rounded-lg border border-amber-400/50 bg-amber-900/20 px-4 py-2 text-xs text-amber-200">
+      <div className="hidden rounded-lg border border-amber-400/50 bg-amber-900/20 px-4 py-2 text-xs text-amber-200">
         <p className="font-semibold">Heads-up: Zama relayer fees</p>
         <p className="mt-1 leading-relaxed">
           Proof validation, decrypt, and bridge operations require <span className="font-mono">$ZAMA</span> credits. Decide whether the app, the relayer, or end users cover these costs before going live.
@@ -800,6 +1221,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                   </span>
                 )}
               </div>
+              {attachmentPreview && (
+                <img
+                  src={attachmentPreview}
+                  alt="Attachment preview"
+                  className="ml-3 h-12 w-12 rounded border border-purple-500/40 object-cover"
+                />
+              )}
               <button
                 type="button"
                 onClick={removeAttachment}
@@ -835,6 +1263,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
             onClick={() => {
               setUnlockMode("preset");
               setIsPresetsOpen(!isPresetsOpen);
+              setPlannedUnlockTimestamp(Math.floor(Date.now() / 1000) + presetDuration);
             }}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
               unlockMode === "preset"
@@ -882,6 +1311,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                 type="button"
                 onClick={() => {
                   setPresetDuration(value);
+                  setPlannedUnlockTimestamp(Math.floor(Date.now() / 1000) + value);
                   setIsPresetsOpen(false); // Dropdown'ı kapat
                 }}
                 className={`rounded-lg px-3 py-2 text-sm transition ${
