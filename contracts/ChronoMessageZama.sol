@@ -71,12 +71,15 @@ contract ChronoMessageZama is SepoliaConfig {
 
     /// @notice Returns the encrypted payload once the message unlocks and the caller is authorised
     /// @param messageId Identifier of the message to read
-    /// @return content Ciphertext bound to the sender/receiver pair
+    /// @return content Ciphertext handle to be decrypted via gateway
     function readMessage(uint256 messageId) external returns (euint64 content) {
         Message storage m = _messages[messageId];
         require(m.exists, "Message not found");
         require(block.timestamp >= m.unlockTime, "Message locked");
         require(msg.sender == m.sender || msg.sender == m.receiver, "Not authorised");
+
+        // Grant permission to caller for decryption (needed for gateway)
+        FHE.allow(m.encryptedContent, msg.sender);
 
         emit MessageRead(messageId, msg.sender);
         return m.encryptedContent;
