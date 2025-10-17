@@ -924,7 +924,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       setError(
         shortMessage
           ? `⛔ On-chain simülasyon başarısız: ${shortMessage}`
-          : "⛔ On-chain simülasyon başarısız oldu. Lütfen birkaç saniye sonra tekrar deneyin."
+          : "⛔ On-chain simulation failed. Please try again in a few seconds."
       );
     }
   }, [prepareError]);
@@ -963,7 +963,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       
       return { local: localTime, utc: utcTime, selected: selectedTime, relative };
     } catch (err) {
-      console.error("Tarih display hatası:", err);
+  console.error("Date display error:", err);
       return { local: "---", utc: "---", selected: "---", relative: "---" };
     }
   }, [plannedUnlockTimestamp, mounted, selectedTimezone, txUnlockTime]);
@@ -1154,19 +1154,19 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     event.preventDefault();
     
     if (!isConnected) {
-      setError("Önce cüzdanınızı bağlayın.");
+  setError("Connect your wallet first.");
       return;
     }
     if (!receiver || !isAddress(receiver)) {
-      setError("Geçerli bir alıcı adresi girin.");
+  setError("Enter a valid recipient address.");
       return;
     }
     if (receiver.toLowerCase() === userAddress?.toLowerCase()) {
-      setError("❌ Kendine mesaj gönderemezsiniz! Lütfen farklı bir alıcı adresi girin.");
+  setError("❌ You cannot send a message to yourself. Please enter a different recipient address.");
       return;
     }
     if (content.trim().length === 0) {
-      setError("Mesaj içeriği boş olamaz.");
+  setError("Message content cannot be empty.");
       return;
     }
     
@@ -1418,7 +1418,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               className="flex items-center gap-2 rounded-lg border border-purple-500/40 bg-purple-900/20 px-4 py-2 text-sm font-medium text-purple-300 transition hover:bg-purple-900/30 hover:border-purple-500/60 disabled:opacity-50"
             >
               <span>📎</span>
-              {uploadingFile ? "Yükleniyor..." : "Dosya Ekle"}
+              {uploadingFile ? "Uploading..." : "Attach File"}
             </button>
           ) : (
             <div className="flex-1 flex items-center justify-between rounded-lg border border-green-500/40 bg-green-900/20 px-4 py-2">
@@ -1459,8 +1459,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         
         <p className="text-xs text-text-light/60">
           {attachedFile 
-            ? "📎 Ekli dosya mesajınızla birlikte IPFS'e yüklendi ve blockchain'e kaydedilecek"
-            : "💡 İsteğe bağlı: Resim, PDF, Video veya APK dosyası ekleyebilirsiniz (max 50MB)"
+            ? "📎 The attached file is uploaded to IPFS and recorded on-chain with your message."
+            : "💡 Optional: You can add an image, PDF, video, or APK attachment (max 50MB)."
           }
         </p>
       </div>
@@ -1566,7 +1566,7 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
                 onChange={(e) => setSelectedTimezone(e.target.value)}
                 className="rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-2 text-sm text-slate-100 outline-none transition focus:border-neon-orange focus:ring-2 focus:ring-neon-orange/60"
               >
-                <optgroup label="🇹🇷 Türkiye">
+                <optgroup label="🇹🇷 Turkey">
                   <option value="Europe/Istanbul">İstanbul (UTC+3)</option>
                 </optgroup>
                 <optgroup label="🇪🇺 Avrupa">
@@ -1731,8 +1731,8 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               {/* Helper Text */}
               <p className="text-xs text-purple-300/60">
                 {paymentInputMode === "ETH" 
-                  ? "💡 Örnek: 0.001 ETH (küsurat kabul edilir)"
-                  : "💡 Örnek: 1000000000000000 Wei (1 ETH = 10¹⁸ Wei)"
+                  ? "💡 Example: 0.001 ETH (decimals allowed)"
+                  : "💡 Example: 1000000000000000 Wei (1 ETH = 10¹⁸ Wei)"
                 }
               </p>
               

@@ -57,7 +57,7 @@ export function Providers({ children }: PropsWithChildren) {
 
   const connectors = connectorsForWallets([
     {
-      groupName: "Önerilen",
+  groupName: "Recommended",
       wallets: [
         injectedWallet({ chains }),
         metaMaskWallet({ chains, projectId: "sealedmessage" })

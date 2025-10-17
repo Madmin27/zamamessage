@@ -133,7 +133,7 @@ async function fetchMessage(
     
     const relative = isPaymentLocked
       ? (unlocked ? "Payment received" : "Waiting for payment")
-      : (unlocked ? "Açıldı" : unlockDate.fromNow());
+  : (unlocked ? "Opened" : unlockDate.fromNow());
     
     // Dosya metadata parse et (contentType=1 ise)
     let fileMetadata: { name: string; size: number; type: string } | undefined;

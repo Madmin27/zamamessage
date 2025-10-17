@@ -77,18 +77,18 @@ export function DeployButton({ onDeployed }: DeployButtonProps) {
         }, 100);
       } else {
         setIsDeploying(false);
-        setError("Contract adresi event'lerden bulunamadı");
+  setError("Contract address could not be found in the events");
       }
     },
     onError: (error) => {
       setIsDeploying(false);
-      setError(error.message || "Transaction başarısız oldu");
+  setError(error.message || "Transaction failed");
     }
   });
 
   const handleDeploy = async () => {
     if (!isConnected) {
-      setError("Önce cüzdanınızı bağlayın");
+  setError("Connect your wallet first");
       return;
     }
 

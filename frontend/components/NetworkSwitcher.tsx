@@ -207,17 +207,17 @@ export function NetworkSwitcher() {
           {!showAll && mainnets.length > 0 && (
             <div className="border-t border-slate-700 bg-blue-900/20 px-4 py-3">
               <p className="text-xs text-blue-200">
-                💡 <strong>{mainnets.length} mainnet</strong> daha mevcut. "Tüm Ağlar" butonuna tıklayın.
+                💡 <strong>{mainnets.length} mainnets</strong> available. Click the "All Networks" button.
               </p>
             </div>
           )}
 
           <div className="border-t border-slate-700 bg-slate-800/50 px-4 py-3">
-            <h4 className="text-xs font-semibold text-slate-300">📌 Not:</h4>
+            <h4 className="text-xs font-semibold text-slate-300">📌 Note:</h4>
             <ul className="mt-1 space-y-1 text-xs text-slate-400">
-              <li>• Testnetlerde ücretsiz token alabilirsiniz (faucet)</li>
-              <li>• Mainnetlerde gerçek para harcanır</li>
-              <li>• Factory contract her ağda ayrı deploy edilmelidir</li>
+              <li>• You can claim free tokens on testnets (faucet)</li>
+              <li>• Mainnets spend real funds</li>
+              <li>• Deploy the factory contract separately on each network</li>
             </ul>
           </div>
         </div>

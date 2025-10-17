@@ -75,21 +75,21 @@ export default function TestNewFHEAPI() {
 
   async function testStoreValue() {
     if (!fhe || !address) {
-      setStatus("❌ FHE veya wallet bağlı değil!");
+  setStatus("❌ FHE or wallet is not connected!");
       return;
     }
     if (!isSepolia) {
-      setStatus("❌ Yanlış ağ: Zama FHE sadece Sepolia (11155111) destekler. Lütfen Sepolia'ya geçin.");
+  setStatus("❌ Wrong network: Zama FHE only supports Sepolia (11155111). Please switch to Sepolia.");
       return;
     }
 
     try {
-      setStatus("1️⃣ Değer şifreleniyor...");
+  setStatus("1️⃣ Encrypting value...");
       const value = BigInt(testValue);
       
       // FHE hazır mı kontrol et
       if (!fhe.createEncryptedInput) {
-        setStatus("❌ FHE henüz yüklenmedi! Sayfayı yenileyin.");
+  setStatus("❌ FHE has not loaded yet. Refresh the page.");
         return;
       }
       
@@ -107,7 +107,7 @@ export default function TestNewFHEAPI() {
       });
       
       if (!encryptedValue.handles || !encryptedValue.handles[0]) {
-        setStatus("❌ Şifreleme başarısız: handles boş!");
+  setStatus("❌ Encryption failed: handles array is empty!");
         return;
       }
       
@@ -129,7 +129,7 @@ export default function TestNewFHEAPI() {
       });
       
       if (!encryptedData || !proof) {
-        setStatus("❌ Dönüşüm başarısız: handle/proof hex string değil");
+  setStatus("❌ Conversion failed: handle/proof is not a hex string");
         return;
       }
 
@@ -150,12 +150,12 @@ export default function TestNewFHEAPI() {
         });
       } catch (simErr: any) {
         const msg = simErr?.shortMessage || simErr?.message || "simulateContract failed";
-        console.error("🧪 Simülasyon revert:", simErr);
-        setStatus(`❌ Simülasyon revert: ${msg}`);
+  console.error("🧪 Simulation revert:", simErr);
+  setStatus(`❌ Simulation reverted: ${msg}`);
         return;
       }
 
-      setStatus("2️⃣ Cüzdan onayı bekleniyor...");
+  setStatus("2️⃣ Waiting for wallet confirmation...");
       
       // YENİ API: FHE.fromExternal(externalEuint64, bytes)
       write({
@@ -163,12 +163,12 @@ export default function TestNewFHEAPI() {
       });
       
     } catch (error: any) {
-      console.error("❌ HATA:", error);
+  console.error("❌ ERROR:", error);
       
       if (error.message.includes("Invalid index")) {
-        setStatus("❌ BAŞARISIZ: 'Invalid index' hatası DEVAM EDİYOR!");
+  setStatus("❌ FAILED: 'Invalid index' error persists!");
       } else {
-        setStatus(`❌ Hata: ${error.message}`);
+  setStatus(`❌ Error: ${error.message}`);
       }
     }
   }
@@ -176,25 +176,25 @@ export default function TestNewFHEAPI() {
   // İşlem akışını görünür kıl: cüzdan onayı / ağ onayı / başarı / hatalar
   useEffect(() => {
     if (isWriting) {
-      setStatus((s) => s || "2️⃣ Cüzdan onayı bekleniyor...");
+  setStatus((s) => s || "2️⃣ Waiting for wallet confirmation...");
     }
   }, [isWriting]);
 
   useEffect(() => {
     if (writeResult?.hash && !isConfirming && !isSuccess) {
-      setStatus("3️⃣ Ağ onayı bekleniyor...");
+  setStatus("3️⃣ Waiting for network confirmation...");
     }
   }, [writeResult?.hash, isConfirming, isSuccess]);
 
   useEffect(() => {
     if (isConfirming) {
-      setStatus("3️⃣ Ağ onayı bekleniyor...");
+  setStatus("3️⃣ Waiting for network confirmation...");
     }
   }, [isConfirming]);
 
   useEffect(() => {
     if (isSuccess) {
-      setStatus("🎉 BAŞARILI! YENİ FHE API ÇALIŞIYOR!");
+  setStatus("🎉 SUCCESS! The new FHE API works!");
     }
   }, [isSuccess]);
 
@@ -202,7 +202,7 @@ export default function TestNewFHEAPI() {
     if (writeError) {
       // @ts-ignore
       const msg = (writeError as any)?.shortMessage || writeError.message;
-      setStatus(`❌ İmza reddedildi veya hata: ${msg}`);
+  setStatus(`❌ Signature rejected or error: ${msg}`);
     }
   }, [writeError]);
 
@@ -211,8 +211,8 @@ export default function TestNewFHEAPI() {
     if (!writeResult?.hash || isSuccess) return;
     const t = setTimeout(() => {
       setStatus((prev) =>
-        prev.includes("Ağ onayı")
-          ? "⏳ Ağ onayı bekleniyor... (Sepolia yoğun olabilir, Etherscan linkinden takip edebilirsiniz)"
+        prev.includes("network confirmation")
+          ? "⏳ Waiting for network confirmation... (Sepolia might be busy; track it via the Etherscan link)"
           : prev
       );
     }, 90000);
@@ -221,7 +221,7 @@ export default function TestNewFHEAPI() {
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-4">YENİ FHE API Testi</h2>
+      <h2 className="text-2xl font-bold mb-4">New FHE API Test</h2>
 
       <div className="mb-6 p-4 bg-blue-50 rounded">
         <p className="text-sm"><strong>Contract:</strong> {TEST_CONTRACT}</p>
@@ -234,13 +234,13 @@ export default function TestNewFHEAPI() {
           <strong>Wallet:</strong> {address ? `✅ ${address.slice(0, 6)}...${address.slice(-4)}` : "❌ Not connected"}
         </p>
         <p className="text-sm">
-          <strong>Network:</strong> {isSepolia ? "✅ Sepolia" : `❌ ${chainId ?? "unknown"}`} (Zama sadece Sepolia'yı destekler)
+          <strong>Network:</strong> {isSepolia ? "✅ Sepolia" : `❌ ${chainId ?? "unknown"}`} (Zama supports Sepolia only)
         </p>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">Test Değeri:</label>
+          <label className="block text-sm font-medium mb-2">Test Value:</label>
           <input
             type="number"
             className="w-full border rounded px-3 py-2"
@@ -254,7 +254,7 @@ export default function TestNewFHEAPI() {
           disabled={!address || !fheReady || !isSepolia || isWriting || isConfirming}
           className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
         >
-          {isWriting ? "Cüzdan Onayı..." : isConfirming ? "Ağ Onayı..." : "Test Et"}
+          {isWriting ? "Wallet Confirmation..." : isConfirming ? "Network Confirmation..." : "Run Test"}
         </button>
 
         {status && (
@@ -287,10 +287,10 @@ export default function TestNewFHEAPI() {
       </div>
 
       <div className="mt-6 p-4 bg-yellow-50 rounded text-sm">
-        <p className="font-semibold mb-2">🎯 Test Hedefi:</p>
+        <p className="font-semibold mb-2">🎯 Test Goal:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>✅ Transaction başarılı olursa → Kütüphane update'i ÇALIŞTI!</li>
-          <li>❌ "Invalid index" hatası devam ederse → Başka bir çözüm gerekiyor</li>
+          <li>✅ If the transaction succeeds → the library update WORKS!</li>
+          <li>❌ If the "Invalid index" error persists → another fix is required</li>
         </ul>
       </div>
     </div>

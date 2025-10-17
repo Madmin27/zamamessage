@@ -6,8 +6,6 @@ Farklı test ve mainnet ağlar için de ekleyelim. Base öncelikli
  
 Bir nft satılmışsa ve hangi cüzdandaysa, ona açılan mesaj
 
-
-
 https://github.com/zama-ai/fhevm 
  burada  nasıl
 
@@ -48,7 +46,7 @@ sudo systemctl restart sealedmessage-frontend && echo "✅ Frontend restart edil
 
 grep -EHrn "0x50587bC2bef7C66bC2952F126ADbafCc4Ab9c9D0" .
 
-grep -EHrn "Heads-up: Zama relayer fees" . --exclude-dir=./.next/cache
+grep -EHrn "iekbcc0 ju367va ju367v1s" . --exclude-dir=./.next/cache
 grep -EHrn "unitPrice" . --exclude-dir=var --exclude=*.js
 grep -EHrn "https://hepsiantep\.com" .
 grep -EHrn "http://54\.38\.239\.188" . # Kendi IP adresiniz
