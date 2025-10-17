@@ -162,7 +162,13 @@ export function MessageFormZama({ onSubmitted }: MessageFormProps) {
           receiver as `0x${string}`,
           mockEncryptedHandle,
           mockInputProof,
-          BigInt(unlockTimestamp)
+          BigInt(unlockTimestamp),
+          0n, // requiredPayment (0 for test)
+          0x01, // conditionMask (time-only)
+          "", // fileName
+          0n, // fileSize
+          "", // contentType
+          "" // previewImageHash
         ],
         chain: walletClient.chain,
         account: userAddress

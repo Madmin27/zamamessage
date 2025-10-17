@@ -59,8 +59,8 @@ export const confidentialMessageAbi = [
   {
     "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
     "name": "readMessage",
-  "outputs": [{ "internalType": "euint64", "name": "content", "type": "bytes32" }],
-    "stateMutability": "nonpayable",
+    "outputs": [{ "internalType": "euint64", "name": "content", "type": "bytes32" }],
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -68,11 +68,34 @@ export const confidentialMessageAbi = [
       { "internalType": "address", "name": "receiver", "type": "address" },
       { "internalType": "externalEuint64", "name": "encryptedContent", "type": "bytes32" },
       { "internalType": "bytes", "name": "inputProof", "type": "bytes" },
-      { "internalType": "uint256", "name": "unlockTime", "type": "uint256" }
+      { "internalType": "uint256", "name": "unlockTime", "type": "uint256" },
+      { "internalType": "uint256", "name": "requiredPayment", "type": "uint256" },
+      { "internalType": "uint8", "name": "conditionMask", "type": "uint8" }
     ],
     "name": "sendMessage",
     "outputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
+    "name": "getMessageMetadata",
+    "outputs": [
+      { "internalType": "address", "name": "sender", "type": "address" },
+      { "internalType": "address", "name": "receiver", "type": "address" },
+      { "internalType": "uint256", "name": "unlockTime", "type": "uint256" },
+      { "internalType": "bool", "name": "isUnlocked", "type": "bool" },
+      { "internalType": "uint8", "name": "conditionMask", "type": "uint8" },
+      { "internalType": "uint256", "name": "requiredPayment", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "messageId", "type": "uint256" }],
+    "name": "getRequiredPayment",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
     "type": "function"
   }
 ] as const;

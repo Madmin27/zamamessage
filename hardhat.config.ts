@@ -157,7 +157,8 @@ const config: HardhatUserConfig = {
           optimizer: {
             enabled: true,
             runs: 200
-          }
+          },
+          viaIR: true  // Stack too deep fix for metadata fields
         }
       }
     ]

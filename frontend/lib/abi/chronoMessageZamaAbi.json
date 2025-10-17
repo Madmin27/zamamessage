@@ -234,7 +234,7 @@
       "name": "readMessage",
       "outputs": [
         {
-          "internalType": "euint64",
+          "internalType": "euint256",
           "name": "content",
           "type": "bytes32"
         }
@@ -250,7 +250,7 @@
           "type": "address"
         },
         {
-          "internalType": "externalEuint64",
+          "internalType": "externalEuint256",
           "name": "encryptedContent",
           "type": "bytes32"
         },

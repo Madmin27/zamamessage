@@ -23,6 +23,8 @@ https://github.com/Madmin27/open-nft-marketplace
 npx hardhat compile
 
 npm run build
+
+
 cd /root/zamamessage && rm -rf .next node_modules/.cache frontend/.next frontend/node_modules/.cache
 cd /root/zamamessage/frontend && npm install
 cd /root/zamamessage/frontend && npm run build
@@ -33,6 +35,16 @@ gerekiyorsa cache temizliği, rebuilt ve
  
  && sleep 3 && sudo systemctl status sealedmessage-frontend
 
+Test Mesaj"
+Kestane kebap, acele cevap...
+Kestane kebap, acele cevap...
+Kestane kebap, acele cevap...
+Kestane kebap, acele cevap...
+ '^'!'^+%&/()=?_>£#$½{[]}\|
+ Kestane kebap, acele cevap...
+ "
+
+sudo systemctl restart sealedmessage-frontend && echo "✅ Frontend restart edildi" && echo "" && echo "🌐 BROWSER CACHE TEMİZLEME:" && echo "1. Chrome/Firefox: Ctrl+Shift+Del" && echo "2. Veya Hard Refresh: Ctrl+Shift+R" && echo "3. Veya Incognito/Private mode ile test et"
 
 grep -EHrn "0x50587bC2bef7C66bC2952F126ADbafCc4Ab9c9D0" .
 

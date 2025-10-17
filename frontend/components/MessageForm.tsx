@@ -7,8 +7,9 @@ import timezone from "dayjs/plugin/timezone";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useAccount, usePrepareContractWrite, useContractWrite, useWaitForTransaction, useNetwork, usePublicClient } from "wagmi";
 import { confidentialMessageAbi } from "../lib/abi-confidential"; // ✅ NEW: EmelMarket Pattern ABI
+import { chronoMessageZamaAbi } from "../lib/abi-zama"; // ✅ v7: Metadata preview
 import { appConfig } from "../lib/env";
-import { decodeEventLog, isAddress } from "viem";
+import { decodeEventLog, isAddress, formatUnits } from "viem";
 import { useContractAddress, useHasContract } from "../lib/useContractAddress";
 // EMELMARKET PATTERN - Using useFhe hook
 import { useFhe } from "./FheProvider";
@@ -17,7 +18,38 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
-const DEFAULT_RECEIVER = "0x50587bC2bef7C66bC2952F126ADbafCc4Ab9c9D0" as const;
+const DEFAULT_RECEIVER = "" as const;
+const EUINT256_BYTE_CAP = 32;
+const utf8Encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : undefined;
+
+const truncateToUtf8Bytes = (value: string, byteLimit: number) => {
+  if (!value) {
+    return { value: "", truncated: false } as const;
+  }
+
+  if (!utf8Encoder) {
+    const fallback = value.slice(0, byteLimit);
+    return { value: fallback, truncated: fallback.length < value.length } as const;
+  }
+
+  const encoded = utf8Encoder.encode(value);
+  if (encoded.length <= byteLimit) {
+    return { value, truncated: false } as const;
+  }
+
+  let total = 0;
+  let result = "";
+  for (const char of Array.from(value)) {
+    const chunk = utf8Encoder.encode(char);
+    if (total + chunk.length > byteLimit) {
+      break;
+    }
+    result += char;
+    total += chunk.length;
+  }
+
+  return { value: result, truncated: true } as const;
+};
 
 const SHORT_HASH_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const SHORT_HASH_LENGTH = 6;
@@ -80,6 +112,12 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [presetDuration, setPresetDuration] = useState<number>(300); // 5 dakika varsayılan
   const [unlock, setUnlock] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  
+  // 💰 Payment koşulu (isteğe bağlı)
+  const [paymentAmount, setPaymentAmount] = useState<string>(""); // Wei cinsinden (internal)
+  const [paymentEnabled, setPaymentEnabled] = useState(false);
+  const [paymentInputMode, setPaymentInputMode] = useState<"ETH" | "Wei">("ETH"); // User-friendly input
+  const [paymentInputValue, setPaymentInputValue] = useState<string>(""); // Görünen değer
   const [mounted, setMounted] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
   const [userTimezone, setUserTimezone] = useState<string>("UTC");
@@ -95,8 +133,11 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
   const [metadataShortHash, setMetadataShortHash] = useState<string>(""); // 6-char reference stored on-chain
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [attachmentPreviewMime, setAttachmentPreviewMime] = useState<string>("image/webp");
+  const [previewIpfsHash, setPreviewIpfsHash] = useState<string>(""); // IPFS hash of preview image
+  const [isUploadingPreview, setIsUploadingPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastPersistedHashRef = useRef<string | null>(null);
+  const lastSentPreviewRef = useRef<{ payload: string; truncated: boolean; original?: string | null } | null>(null);
   const [plannedUnlockTimestamp, setPlannedUnlockTimestamp] = useState<number>(() => Math.floor(Date.now() / 1000) + 300);
   
   // Zama FHE state
@@ -235,76 +276,68 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   // Şifrelenecek veri: 
   // 1. Eğer dosya varsa: Metadata IPFS'e yükle → short hash şifrele
-  // 2. Eğer sadece mesaj varsa: mesaj metni (max 8 char için uyar)
+  // 2. Eğer sadece mesaj varsa: uzun içerikler otomatik olarak metadata'ya taşınır
   let dataToEncrypt = "";
   let uploadedMetadataHash = ""; // Track metadata hash for return
   let resolvedShortHash = metadataShortHash; // Track short hash for return
-    
-    if (ipfsHash && attachedFile) {
-      let shortHash = metadataShortHash;
-      if (!shortHash) {
-        shortHash = generateShortHash();
-        setMetadataShortHash(shortHash);
-        console.log("🆔 Generated short hash inside encryptContent:", shortHash);
-      }
-      resolvedShortHash = shortHash;
 
-      // Dosya metadata'sını IPFS'e yükle
-      const fileData = {
-        type: "file",
-        ipfs: ipfsHash,
-        name: attachedFile.name,
-        size: attachedFile.size,
-        mimeType: attachedFile.type,
-        message: content.trim() || "",
-        shortHash
-      };
-      
-      console.log("📎 Uploading file metadata to IPFS...", fileData);
-      
-      // Metadata'yı IPFS'e yükle
-      const metadataJson = JSON.stringify(fileData);
-      const metadataBlob = new Blob([metadataJson], { type: 'application/json' });
-      const metadataFile = new File([metadataBlob], 'metadata.json', { type: 'application/json' });
-      
+    const uploadMetadataJson = async (
+      payload: Record<string, unknown>,
+      shortHash: string,
+      options: {
+        label?: string;
+        fileInfo?: { fileName?: string | null; fileSize?: number | null; mimeType?: string | null };
+        debugType?: string;
+      } = {}
+    ): Promise<string> => {
+      const label = options.label ?? "message-meta";
+      const payloadType = typeof (payload as any)?.type === "string" ? (payload as any).type : label;
+
+      const metadataJson = JSON.stringify(payload);
+      const metadataBlob = new Blob([metadataJson], { type: "application/json" });
+      const metadataFile = new File([metadataBlob], `${label}.json`, { type: "application/json" });
+
       const formData = new FormData();
       formData.append("file", metadataFile);
-      formData.append("pinataMetadata", JSON.stringify({
-        name: `message-meta-${shortHash}`,
-        keyvalues: {
-          shortHash,
-          type: "message-metadata"
-        }
-      }));
-      
+      formData.append(
+        "pinataMetadata",
+        JSON.stringify({
+          name: `${label}-${shortHash}`,
+          keyvalues: {
+            shortHash,
+            type: "message-metadata",
+            category: payloadType
+          }
+        })
+      );
+
       const pinataApiKey = process.env.NEXT_PUBLIC_PINATA_API_KEY;
       const pinataSecretKey = process.env.NEXT_PUBLIC_PINATA_SECRET_KEY;
-      
+
       if (!pinataApiKey || !pinataSecretKey) {
         throw new Error("IPFS credentials not configured");
       }
-      
+
       const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
         method: "POST",
         headers: {
           pinata_api_key: pinataApiKey,
-          pinata_secret_api_key: pinataSecretKey,
+          pinata_secret_api_key: pinataSecretKey
         },
-        body: formData,
+        body: formData
       });
-      
+
       if (!response.ok) {
         throw new Error("Metadata upload failed");
       }
-      
+
       const data = await response.json();
-      const metadataHashValue = data.IpfsHash;
-      
+      const metadataHashValue = data.IpfsHash as string;
+
       console.log("✅ Metadata uploaded to IPFS:", metadataHashValue);
-      console.log("📦 Full metadata:", fileData);
+      console.log("📦 Full metadata payload:", payload);
       console.log("🔗 Metadata URL:", `https://gateway.pinata.cloud/ipfs/${metadataHashValue}`);
-      
-      // Save mapping to localStorage for cross-device access
+
       const mappingKey = `file-metadata-${shortHash}`;
       try {
         localStorage.setItem(mappingKey, metadataHashValue);
@@ -313,7 +346,6 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
         console.warn("⚠️ Failed to save metadata mapping to localStorage:", err);
       }
 
-      // Notify backend mapping service
       try {
         const response = await fetch("/api/metadata-mapping", {
           method: "POST",
@@ -321,9 +353,9 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
           body: JSON.stringify({
             shortHash,
             fullHash: metadataHashValue,
-            fileName: attachedFile.name,
-            fileSize: attachedFile.size,
-            mimeType: attachedFile.type
+            fileName: options.fileInfo?.fileName ?? undefined,
+            fileSize: options.fileInfo?.fileSize ?? undefined,
+            mimeType: options.fileInfo?.mimeType ?? undefined
           })
         });
 
@@ -333,42 +365,138 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       } catch (err) {
         console.warn("⚠️ Failed to call metadata mapping API:", err);
       }
-      
-      // State'e kaydet
-      setMetadataHash(metadataHashValue);
-      uploadedMetadataHash = metadataHashValue; // Save for return value
 
-      // Debug: append to msg-debug-log
       try {
         const entry = {
           ts: Date.now(),
-          type: 'sent-metadata-upload',
+          type: options.debugType ?? "sent-metadata-upload",
           shortHash,
           metadataHashValue,
-          fileName: attachedFile.name,
+          fileName: options.fileInfo?.fileName ?? null
         };
-        const existing = JSON.parse(localStorage.getItem('msg-debug-log') || '[]');
+        const existing = JSON.parse(localStorage.getItem("msg-debug-log") || "[]");
         existing.push(entry);
-        localStorage.setItem('msg-debug-log', JSON.stringify(existing));
-        console.log('🐛 Debug saved (sent-metadata-upload):', entry);
+        localStorage.setItem("msg-debug-log", JSON.stringify(existing));
+        console.log("🐛 Debug saved (metadata upload):", entry);
       } catch (e) {
-        console.warn('Failed to write debug log:', e);
+        console.warn("Failed to write debug log:", e);
       }
-      
-  // Şifrelenecek veri: "F:" + shortHash (8 byte total)
-  dataToEncrypt = `F:${shortHash}`;
-      
-  console.log("🔐 Data to encrypt:", dataToEncrypt);
-  console.log("📝 Short hash:", shortHash);
-  console.log("💾 Full metadata hash saved to state:", metadataHashValue);
+
+      return metadataHashValue;
+    };
+
+    if (ipfsHash && attachedFile) {
+      let shortHash = metadataShortHash;
+      if (!shortHash) {
+        shortHash = generateShortHash();
+        setMetadataShortHash(shortHash);
+        console.log("🆔 Generated short hash inside encryptContent:", shortHash);
+      }
+      resolvedShortHash = shortHash;
+
+      const fileData = {
+        type: "file",
+        ipfs: ipfsHash,
+        name: attachedFile.name,
+        size: attachedFile.size,
+        mimeType: attachedFile.type,
+        message: content.trim() || "",
+        shortHash
+      };
+
+      console.log("📎 Uploading file metadata to IPFS...", fileData);
+
+      const metadataHashValue = await uploadMetadataJson(fileData, shortHash, {
+        label: "message-meta",
+        fileInfo: {
+          fileName: attachedFile.name,
+          fileSize: attachedFile.size,
+          mimeType: attachedFile.type
+        },
+        debugType: "sent-metadata-upload"
+      });
+
+      setMetadataHash(metadataHashValue);
+      uploadedMetadataHash = metadataHashValue;
+
+      dataToEncrypt = `F:${shortHash}`;
+      lastSentPreviewRef.current = {
+        payload: dataToEncrypt,
+        truncated: false,
+        original: content.trim() || attachedFile?.name || null
+      };
+
+      console.log("🔐 Data to encrypt (file attachment):", dataToEncrypt);
+      console.log("📝 Short hash:", shortHash);
+      console.log("💾 Full metadata hash saved to state:", metadataHashValue);
     } else {
-      // Sadece mesaj (max 8 char warning)
-      dataToEncrypt = content.trim();
-      if (dataToEncrypt.length > 8) {
-        console.warn("⚠️ Message truncated to 8 characters for euint64");
-        dataToEncrypt = dataToEncrypt.substring(0, 8);
+      const plainText = content.trim();
+      if (!plainText) {
+        throw new Error("Message content cannot be empty");
       }
-      console.log("📝 Encrypting text message");
+
+      const encoderInstance = utf8Encoder ?? new TextEncoder();
+      const plainBytes = encoderInstance.encode(plainText);
+
+      if (plainBytes.length > EUINT256_BYTE_CAP) {
+        let shortHash = metadataShortHash;
+        if (!shortHash) {
+          shortHash = generateShortHash();
+          setMetadataShortHash(shortHash);
+          console.log("🆔 Generated short hash for long text:", shortHash);
+        }
+        resolvedShortHash = shortHash;
+
+        const textMetadata = {
+          type: "text",
+          version: 1,
+          shortHash,
+          message: plainText,
+          length: plainBytes.length,
+          preview: plainText.slice(0, 160),
+          createdAt: new Date().toISOString()
+        };
+
+        console.log("📝 Message exceeds 32-byte limit, offloading to metadata:", {
+          utf8Bytes: plainBytes.length,
+          shortHash
+        });
+
+        const metadataHashValue = await uploadMetadataJson(textMetadata, shortHash, {
+          label: "message-text",
+          fileInfo: {
+            fileName: `${shortHash}.txt`,
+            fileSize: plainBytes.length,
+            mimeType: "text/plain; charset=utf-8"
+          },
+          debugType: "sent-text-metadata-upload"
+        });
+
+        setMetadataHash(metadataHashValue);
+        uploadedMetadataHash = metadataHashValue;
+
+        dataToEncrypt = `F:${shortHash}`;
+        lastSentPreviewRef.current = {
+          payload: dataToEncrypt,
+          truncated: false,
+          original: plainText
+        };
+
+        console.log("🔐 Data to encrypt (text metadata):", dataToEncrypt);
+        console.log("💾 Text metadata hash:", metadataHashValue);
+      } else {
+        const { value: truncatedContent, truncated: wasTruncated } = truncateToUtf8Bytes(plainText, EUINT256_BYTE_CAP);
+        if (wasTruncated) {
+          console.warn("⚠️ Message truncated unexpectedly despite length check");
+        }
+        dataToEncrypt = truncatedContent;
+        lastSentPreviewRef.current = {
+          payload: truncatedContent,
+          truncated: wasTruncated,
+          original: plainText
+        };
+        console.log("📝 Encrypting inline text message (≤32 bytes)");
+      }
     }
     
     if (!dataToEncrypt) {
@@ -378,28 +506,35 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     console.log("🔐 Starting encryption with FHE SDK (EmelMarket pattern)...");
     console.log("📝 Data to encrypt:", dataToEncrypt);
     
-    // Convert content to BigInt (64-bit for euint64)
-    const encoder = new TextEncoder();
-    const contentBytes = encoder.encode(dataToEncrypt.slice(0, 8)); // 8 bytes for euint64
-    const paddedBytes = new Uint8Array(8);
-    paddedBytes.set(contentBytes);
+    // Convert content to BigInt (256-bit for euint256)
+  const encoder = utf8Encoder ?? new TextEncoder();
+  const contentBytes = encoder.encode(dataToEncrypt);
+    const paddedBytes = new Uint8Array(EUINT256_BYTE_CAP);
+    paddedBytes.set(contentBytes.slice(0, EUINT256_BYTE_CAP));
     
     let value = 0n;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < EUINT256_BYTE_CAP; i++) {
       value = (value << 8n) | BigInt(paddedBytes[i]);
     }
-    console.log("✅ BigInt value ready (64-bit):", value.toString());
+  console.log("✅ BigInt value ready (256-bit):", value.toString());
     
-    // EMELMARKET PATTERN - Direct SDK encryption
+    console.log("🔐 Encryption parameters (only content encrypted):", {
+      contentValue: value.toString(),
+      unlockTime: plannedUnlockTimestamp,
+      paymentAmount: paymentAmount || '0',
+      paymentEnabled
+    });
+    
+    // EMELMARKET PATTERN - Only encrypt content (time+payment are plain text)
     const encryptedValue = await instance
       .createEncryptedInput(contractAddress, userAddress)
-      .add64(value)
+      .add256(value)  // Encrypted content only
       .encrypt();
     
     console.log("✅ FHE SDK encryption complete!", {
       handlesLength: encryptedValue.handles?.length,
       handlesType: typeof encryptedValue.handles?.[0],
-      handles0: encryptedValue.handles?.[0],
+      contentHandle: encryptedValue.handles?.[0],
       proofType: typeof encryptedValue.inputProof,
       proof: encryptedValue.inputProof,
       fullResult: encryptedValue
@@ -582,10 +717,13 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
     if (file.type.startsWith('image/')) {
       generateAttachmentPreview(file)
-        .then((preview) => {
+        .then(async (preview) => {
           if (preview) {
             setAttachmentPreview(preview);
             setAttachmentPreviewMime("image/webp");
+            
+            // 📤 Upload preview to IPFS
+            await uploadPreviewToIPFS(preview);
           } else {
             setAttachmentPreview(null);
           }
@@ -600,6 +738,51 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
     
     // IPFS'e yükle
     await uploadToIPFS(file);
+  };
+  
+  // 📤 Upload preview image to IPFS
+  const uploadPreviewToIPFS = async (base64Data: string) => {
+    setIsUploadingPreview(true);
+    try {
+      // Base64'ü blob'a çevir
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+      const file = new File([blob], "preview.webp", { type: "image/webp" });
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const pinataApiKey = process.env.NEXT_PUBLIC_PINATA_API_KEY;
+      const pinataSecretKey = process.env.NEXT_PUBLIC_PINATA_SECRET_KEY;
+      
+      if (!pinataApiKey || !pinataSecretKey) {
+        console.warn("⚠️ IPFS credentials not configured, preview won't be uploaded");
+        return;
+      }
+      
+      const uploadResponse = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+        method: "POST",
+        headers: {
+          pinata_api_key: pinataApiKey,
+          pinata_secret_api_key: pinataSecretKey,
+        },
+        body: formData,
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`Preview upload failed: ${uploadResponse.statusText}`);
+      }
+      
+      const data = await uploadResponse.json();
+      const hash = data.IpfsHash;
+      
+      console.log("✅ Preview uploaded to IPFS:", hash);
+      setPreviewIpfsHash(hash);
+    } catch (err) {
+      console.warn("⚠️ Preview upload failed:", err);
+    } finally {
+      setIsUploadingPreview(false);
+    }
   };
   
   const uploadToIPFS = async (file: File) => {
@@ -685,17 +868,32 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
 
   const shouldPrepare = basePrepareReady && !!encryptedData && !isEncrypting && preparedUnlockTime !== null;
   
-  // Zama Contract Write - FHE encrypted
+  // Calculate mask: 0x01=time, 0x02=payment, 0x03=both
+  const conditionMask = useMemo(() => {
+    let mask = 0;
+    if (preparedUnlockTime && preparedUnlockTime > 0) mask |= 0x01; // Time condition
+    if (paymentEnabled && paymentAmount && BigInt(paymentAmount) > 0n) mask |= 0x02; // Payment condition
+    return mask > 0 ? mask : 0x01; // Default to time-only if nothing selected
+  }, [preparedUnlockTime, paymentEnabled, paymentAmount]);
+  
+  // Zama Contract Write - FHE encrypted with payment support
   const { config: configZama, error: prepareError } = usePrepareContractWrite({
     address: contractAddress as `0x${string}`,
-    abi: confidentialMessageAbi, // ✅ NEW: EmelMarket Pattern ABI
+    abi: chronoMessageZamaAbi, // ✅ v7: Metadata preview ABI
     functionName: "sendMessage",
     args: encryptedData && isZamaContract && preparedUnlockTime !== null
       ? [
           receiver as `0x${string}`,
-          encryptedData.handles[0] as `0x${string}`, // externalEuint64 (bytes32 handle)
-          encryptedData.inputProof as `0x${string}`, // bytes inputProof - AYRI PARAMETRE!
-          BigInt(preparedUnlockTime)
+          encryptedData.handles[0] as `0x${string}`, // externalEuint256 (content handle)
+          encryptedData.inputProof as `0x${string}`, // bytes inputProof
+          BigInt(preparedUnlockTime), // unlockTime (plain text)
+          BigInt(paymentAmount || '0'), // requiredPayment (plain text, wei)
+          conditionMask, // uint8 mask (0x01=time, 0x02=payment, 0x03=both)
+          // 📋 METADATA: File preview information (visible even when locked)
+          attachedFile?.name || "", // fileName
+          BigInt(attachedFile?.size || 0), // fileSize
+          attachedFile?.type || "", // contentType (MIME)
+          previewIpfsHash || "" // previewImageHash (IPFS hash for preview image)
         ]
       : undefined,
     enabled: shouldPrepare && isZamaContract,
@@ -799,10 +997,10 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       const latestAttachment = attachedFile;
       const latestShortHash = encryptedData?.metadataShortHash || metadataShortHash;
 
-  if (attachmentPreview && publicClient && txHash) {
+      let resolvedMessageId: string | undefined;
+      if (publicClient && txHash) {
         try {
           const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
-          let messageId: string | undefined;
           for (const log of receipt.logs) {
             if (contractAddress && log.address?.toLowerCase() !== contractAddress.toLowerCase()) {
               continue;
@@ -816,18 +1014,18 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               if (decoded.eventName === "MessageSent") {
                 const rawId = decoded.args?.messageId as bigint | string | undefined;
                 if (rawId !== undefined && rawId !== null) {
-                  messageId = typeof rawId === "bigint" ? rawId.toString() : String(rawId);
+                  resolvedMessageId = typeof rawId === "bigint" ? rawId.toString() : String(rawId);
                   break;
                 }
               }
             } catch (err) {
-              // Log decode might fail for unrelated events; ignore silently.
+              // Ignore logs that do not match the event shape we expect
             }
           }
 
-          if (messageId) {
+          if (resolvedMessageId && attachmentPreview) {
             const previewPayload = {
-              messageId,
+              messageId: resolvedMessageId,
               previewDataUrl: attachmentPreview,
               mimeType: attachmentPreviewMime,
               shortHash: latestShortHash ?? null,
@@ -840,19 +1038,39 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
               body: JSON.stringify(previewPayload)
             });
             if (!response.ok) {
-              console.warn(
-                "⚠️ Preview store responded with",
-                response.status,
-                response.statusText
-              );
+              console.warn("⚠️ Preview store responded with", response.status, response.statusText);
             } else {
-              console.log("🖼️ Stored preview for message", messageId);
+              console.log("🖼️ Stored preview for message", resolvedMessageId);
             }
           }
         } catch (err) {
-          console.warn("⚠️ Failed to persist preview", err);
+          console.warn("⚠️ Failed to load transaction receipt for preview", err);
         }
       }
+
+      try {
+        const previewPayload = lastSentPreviewRef.current;
+        if (previewPayload && resolvedMessageId) {
+          const storagePrefix = contractAddress ? `${contractAddress.slice(0, 10)}-msg` : 'msg';
+          const storageKey = `${storagePrefix}-sent-preview-${resolvedMessageId}`;
+          const payloadToStore = {
+            payload: previewPayload.payload,
+            truncated: previewPayload.truncated,
+            original: previewPayload.original,
+            fileMetadata: latestAttachment
+              ? {
+                  fileName: latestAttachment.name,
+                  fileSize: latestAttachment.size,
+                  mimeType: latestAttachment.type
+                }
+              : null
+          };
+          localStorage.setItem(storageKey, JSON.stringify(payloadToStore));
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to write sent preview cache', err);
+      }
+      lastSentPreviewRef.current = null;
 
       if (cancelled) {
         return;
@@ -1414,10 +1632,146 @@ export function MessageForm({ onSubmitted }: MessageFormProps) {
       </div>
       </div>
       
+      {/* 💰 Payment Condition (Optional) */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="paymentEnabled"
+            checked={paymentEnabled}
+            onChange={(e) => setPaymentEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-cyber-blue/40 bg-midnight/60 text-purple-500 focus:ring-2 focus:ring-purple-500/60"
+          />
+          <label htmlFor="paymentEnabled" className="text-sm font-semibold uppercase tracking-wide text-purple-400">
+            💰 Require Payment to Unlock (Optional)
+          </label>
+        </div>
+        
+        {paymentEnabled && (
+          <div className="rounded-lg border-2 border-purple-500/40 bg-purple-900/10 p-4 space-y-3 animate-in slide-in-from-top duration-200">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="paymentAmount" className="text-xs font-medium text-purple-300">
+                  💵 Required Payment Amount
+                </label>
+                {/* ETH/Wei Toggle */}
+                <div className="flex gap-1 rounded-lg bg-midnight/60 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentInputMode("ETH");
+                      // Convert current Wei to ETH
+                      if (paymentAmount) {
+                        const ethValue = formatUnits(BigInt(paymentAmount), 18);
+                        setPaymentInputValue(ethValue);
+                      }
+                    }}
+                    className={`px-3 py-1 text-xs font-medium rounded transition ${
+                      paymentInputMode === "ETH"
+                        ? "bg-purple-500 text-white"
+                        : "text-purple-300 hover:text-purple-200"
+                    }`}
+                  >
+                    ETH
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentInputMode("Wei");
+                      // Show current Wei value
+                      setPaymentInputValue(paymentAmount || "0");
+                    }}
+                    className={`px-3 py-1 text-xs font-medium rounded transition ${
+                      paymentInputMode === "Wei"
+                        ? "bg-purple-500 text-white"
+                        : "text-purple-300 hover:text-purple-200"
+                    }`}
+                  >
+                    Wei
+                  </button>
+                </div>
+              </div>
+              
+              <input
+                id="paymentAmount"
+                type="text"
+                value={paymentInputValue}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  
+                  if (paymentInputMode === "ETH") {
+                    // Allow decimal numbers for ETH
+                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                      setPaymentInputValue(value);
+                      
+                      // Convert to Wei
+                      if (value && value !== '.') {
+                        try {
+                          const weiValue = Math.floor(parseFloat(value) * 1e18).toString();
+                          setPaymentAmount(weiValue);
+                        } catch {
+                          setPaymentAmount('0');
+                        }
+                      } else {
+                        setPaymentAmount('0');
+                      }
+                    }
+                  } else {
+                    // Wei mode: only integers
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setPaymentInputValue(value);
+                      setPaymentAmount(value || '0');
+                    }
+                  }
+                }}
+                placeholder={paymentInputMode === "ETH" ? "0.001" : "1000000000000000"}
+                className="rounded-lg border border-purple-500/40 bg-midnight/60 px-4 py-3 font-mono text-sm text-text-light outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/60"
+              />
+              
+              {/* Helper Text */}
+              <p className="text-xs text-purple-300/60">
+                {paymentInputMode === "ETH" 
+                  ? "💡 Örnek: 0.001 ETH (küsurat kabul edilir)"
+                  : "💡 Örnek: 1000000000000000 Wei (1 ETH = 10¹⁸ Wei)"
+                }
+              </p>
+              
+              {/* Preview Box */}
+              {paymentAmount && paymentAmount !== '0' && (
+                <div className="rounded-lg bg-purple-500/10 border border-purple-500/30 p-3 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-purple-300/80">ETH:</span>
+                    <span className="font-mono text-purple-200">
+                      {formatUnits(BigInt(paymentAmount), 18)} ETH
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-purple-300/80">Wei:</span>
+                    <span className="font-mono text-purple-200 text-[10px]">
+                      {paymentAmount}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-purple-300/80 italic">
+              🔒 Alıcı, mesajı okuyabilmek için bu miktarı ödeyecek. Ödeme otomatik olarak size (gönderici) aktarılır.
+            </p>
+          </div>
+        )}
+        
+        {!paymentEnabled && (
+          <p className="text-xs text-text-light/60">
+            💡 İsteğe bağlı: Mesajın okunması için ödeme koşulu ekleyebilirsiniz
+          </p>
+        )}
+      </div>
+      
       {/* Zama FHE encryption status */}
       {isEncrypting && (
-        <div className="rounded-lg bg-neon-green/10 border border-neon-green/40 p-3 text-sm text-neon-green">
-          🔐 Encrypting message with Zama FHE...
+        <div className="rounded-lg bg-neon-green/10 border border-neon-green/40 p-3 text-sm text-neon-green flex items-center gap-2">
+          <span className="animate-spin">⟳</span>
+          <span>🔐 Encrypting message with Zama FHE...</span>
         </div>
       )}
       {encryptedData && !isEncrypting && !write && (

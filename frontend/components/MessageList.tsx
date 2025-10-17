@@ -31,6 +31,7 @@ interface MessageViewModel {
   content: string | null;
   isRead: boolean;
   isSent: boolean;
+  contractAddress?: string; // ✅ Hangi contract'tan geldiği
   timestamp?: bigint; // Mesajın gönderilme zamanı
   transactionHash?: string; // İşlem hash'i (mesaj gönderilirken)
   // V3 ödeme bilgileri
@@ -388,9 +389,9 @@ export function MessageList({ refreshKey }: MessageListProps) {
                 abi: contractAbi as any,
                 functionName: "getMessageMetadata",
                 args: [BigInt(i)]
-              }) as [string, string, bigint, boolean];
+              }) as [string, string, bigint, boolean, number, bigint]; // ✅ 6 parametre (v7)
               
-              const [sender, receiver, unlockTime, isUnlocked] = metadata;
+              const [sender, receiver, unlockTime, isUnlocked, conditionMask, requiredPayment] = metadata;
               
               // Kullanıcının gönderdiği VEYA aldığı mesajları filtrele
               const isSender = sender.toLowerCase() === userAddress.toLowerCase();
@@ -406,7 +407,9 @@ export function MessageList({ refreshKey }: MessageListProps) {
                   unlocked: isUnlocked,
                   isRead: false,
                   isSent: isSender,
-                  conditionType: 0, // TIME_LOCK only
+                  contractAddress: contractAddress, // ✅ Contract address ekle
+                  conditionType: conditionMask, // ✅ Condition mask (0x01=time, 0x02=payment, 0x03=both)
+                  requiredPayment: requiredPayment, // ✅ Payment amount
                   contentType: 2, // ENCRYPTED
                   relative: dayjs.unix(Number(unlockTime)).fromNow(),
                   content: "[Encrypted with FHE 🔐]"
@@ -538,17 +541,38 @@ export function MessageList({ refreshKey }: MessageListProps) {
             </p>
           )}
         </div>
-        <button
-          onClick={loadMessages}
-          disabled={loading}
-          className="
-            rounded-lg border border-aurora/40 bg-aurora/10 px-4 py-2 text-sm text-aurora 
-            transition-all hover:bg-aurora/20 hover:border-aurora/60
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
-        >
-          {loading ? "⟳" : `Refresh (auto in ${autoRefreshLabel})`}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={loadMessages}
+            disabled={loading}
+            className="
+              rounded-lg border border-aurora/40 bg-aurora/10 px-4 py-2 text-sm text-aurora 
+              transition-all hover:bg-aurora/20 hover:border-aurora/60
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
+          >
+            {loading ? "⟳" : `Refresh (auto in ${autoRefreshLabel})`}
+          </button>
+          
+          {/* 🗑️ Cache Temizleme Butonu */}
+          <button
+            onClick={() => {
+              // Eski contract cache'lerini temizle
+              const keys = Object.keys(localStorage);
+              const msgKeys = keys.filter(k => k.includes('-msg-') || k.startsWith('msg-'));
+              msgKeys.forEach(k => localStorage.removeItem(k));
+              showToast(`🗑️ ${msgKeys.length} cache entry cleared`, 'success');
+              setTimeout(() => loadMessages(), 500);
+            }}
+            className="
+              rounded-lg border border-red-500/40 bg-red-900/20 px-4 py-2 text-sm text-red-300 
+              transition-all hover:bg-red-900/30 hover:border-red-500/60
+            "
+            title="Eski contract cache'lerini temizle"
+          >
+            🗑️ Clear Cache
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -662,6 +686,7 @@ export function MessageList({ refreshKey }: MessageListProps) {
                 isRead={item.isRead}
                 isSent={item.isSent}
                 index={index}
+                contractAddress={item.contractAddress} // ✅ Contract address geç
                 requiredPayment={item.requiredPayment}
                 paidAmount={item.paidAmount}
                 conditionType={item.conditionType}
