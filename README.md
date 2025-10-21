@@ -4,6 +4,10 @@ SealedMessage is a privacy-first messenger for blockchains. Every note you send 
 
 ![Ethereum Sepolia](https://img.shields.io/badge/Ethereum-Sepolia-4d4d4d?style=flat) ![Zama FHE](https://img.shields.io/badge/Zama-FHEVM-14274e?style=flat) ![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?style=flat&logo=next.js)
 
+https://zama.minen.com.tr/
+
+https://youtu.be/MdFKtYHHOCI
+
 ## Why We Built This
 - **Time-released secrets**: Deliver invitations, credentials, or surprises that only become readable after your chosen timestamp.
 - **End-to-end privacy on public chains**: Zama FHE lets us keep everything encrypted on-chain while still enforcing business logic like ACL checks or unlock windows.
